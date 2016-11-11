@@ -740,6 +740,10 @@ def LimpiaHD():
 		if not os.path.exists(f[:-3] + 'mkv'):
 			print('Borramos ' + f)
 			os.remove(f)
+	lista = glob.glob('*.tmp')
+	for f in lista:
+		print('Borramos ' + f)
+		os.remove(f)
 	return
 
 def LimpiaPasados():
