@@ -90,8 +90,8 @@ def BorraVistos(Liberar = 20):
 	# Obtenemos el listado de ficheros con bookmarks y con su duración
 	if type(Liberar) is str:
 		Liberar = float(Liberar)
-	lista = os.popen('sqlite3 /mnt/e/.mini/files.db "select path,sec,duration from bookmarks inner join details on bookmarks.id=details.id;" | grep pasados | grep :').read()
-	lista = sorted(filter(None, lista.split('\n')))
+	lista = os.popen('sqlite3 /mnt/e/.mini/files.db "select path,sec,duration from bookmarks inner join details on bookmarks.id=details.id where path like \'/mnt/e/pasados/%\' order by path;"').read()
+	lista = filter(None, lista.split('\n'))
 	borrar = []
 	# Los imprimimos
 	for f in range(len(lista)):
@@ -196,11 +196,11 @@ def CopiaNuevas(Pen):
 			os.system('attrib +a "p:\\pelis\\' + f + '"')
 	return
 	
-def CreaWeb(p1, Pocas = 0):
+def CreaWeb(p1 = 'Ultimas', Pocas = 0):
 	""" Se encarga de generar las distintas páginas web necesarios para la gestión de las películas y las series.
 	El fichero html estará en env.PLANTILLAS con el mismo nombre que la plantilla.
 	Se habilita una opción especial para cuando estamos en el curro que también anunciamos series
-	El p1 será la plantilla a usar
+	El p1 será la plantilla a usar, por defecto, el más usado, Ultimas
 	El Pocas habilita la manera antigua de presentar las carátulas. Útil para el curro y las Últimas sin índices y con las
 	carátulas visibles
 	"""
@@ -930,7 +930,40 @@ def Queda(Fichero, Destino):
 		Log('No queda espacio en ' + Destino +' para ' + Fichero, True)
 		return False
 	return True
+
+def ReiniciaDLNA():
+	""" Función para reiniciar el MiniDLNA en caso de ficheros corruptos pero manteniendo los bookmarks de los ficheros exitentes
+	También aprovecharemos para reiniciar el art_cache
+	"""
+	import sqlite3
 	
+	# Paramos servicio
+	os.system('sudo service minidlna stop')
+	# Eliminamos el art_cache
+	os.system('sudo rm -r /mnt/e/.mini/art_cache')
+	# Abrimos BD
+	mini_db = sqlite3.connect('/mnt/e/.mini/files.db')
+	# Creamos cursor
+	mini_cursor = mini_db.cursor()
+	# Obtenemos la lista de bookmarks activos
+	mini_cursor.execute("SELECT path,sec FROM bookmarks INNER JOIN details ON bookmarks.id=details.id")
+	# Guardamos esta tabla
+	Marcadores = mini_cursor.fetchall()
+	# Cerramos el cursor y la BD
+	mini_cursor.close()
+	mini_db.close()
+	# Lanzamos el minidlna en modo restauración de la BD
+	os.system('sudo minidlnad -R')
+	# Ahora tenemos que esperar hasta que en el log indique que ha terminado la indexación
+	mini_log = ''
+	while not 'Finished parsing playlists' in mini_log:
+		time.sleep(15)
+		mini_log = os.system('tail -1 /mnt/e/.mini/minidlna.log').read()
+	# Terminamos el proceso minidlna de reindexado
+	#os.system('kill minidlnad')
+	
+	return True
+
 def Renombra(Viejo, Nuevo):
 	""" Función para renombrar los capítulos de una serie de manera que mantengan una nomenclatura homogénea
 	"""
@@ -1075,7 +1108,7 @@ def Trailer(p1):
 		os.remove(env.TMP + 'NFO')
 		return ''
 	except IndexError as e:
-		Log('Ha habido un problem con el trailer: ' + p1 + ', ' + str(e), True)
+		Log('Ha habido un problem con el trailer: ' + p1 + ', ' + str(e))
 		os.remove(env.TMP + 'NFO')
 		return ''
 	xmlTrailer = xmlTrailer.replace('<trailer>', '').replace('</trailer>', '')
