@@ -1,0 +1,50 @@
+uptime
+free
+pgrep -l amu
+pgrep -l trans
+pgrep -l minidlna
+pgrep -l smb
+df -h /mnt/e /media
+cat /mnt/e/util/quedan.txt
+if [ -a /media/Series ]
+    then
+	echo Ahora lo que hay en el pen, luego lo que hay en la carpeta HD pendiente
+	read p
+	ls -lhst /media/Series /media/Pelis
+fi
+echo HD pendiente pasar a Pen
+find /mnt/e/HD/ \( -perm 666 -o -perm 646 \) -exec du -ch '{}' +
+echo HD pendiente pasar a disco
+find /mnt/e/HD/ \( -perm 666 -o -perm 766 \) -exec du -ch '{}' +
+echo HD Infantiles pendientes de pasar a disco
+find /mnt/e/HD/ \( -perm 746 -o -perm 646 \) -exec du -ch '{}' +
+ls -lhst /mnt/e/HD|grep drwx
+echo Ahora las Series
+read p
+ls -lhst /mnt/e/Series
+echo Series pendientes de copiar
+read p
+find /mnt/e/pasados/ -type f -perm -u+rwx -exec du -ch '{}' +|sort -k 2|more
+echo El log del aMule
+read p
+tail -20 /mnt/e/.aMule/logfile
+echo El log del Transmission
+sudo grep transmission /var/log/daemon.log|tail -20
+echo El log del minidlna y del traspasa
+read p
+tail /mnt/e/.mini/minidlna.log
+tail /mnt/e/.mini/milog.txt
+echo Lo que hay en otros
+read p
+ls -lhst /mnt/e/otros
+echo El transmission
+transmission-remote localhost:8964 -l
+echo El Amule
+read p
+amulecmd -c "show DL"
+echo El Log del sistema
+dmesg -T|grep -v 'shrunk window'|tail -30
+echo el Syslog
+read p
+sudo tail -40 /var/log/syslog|grep -v 'shrunk window'|grep -v CRON
+[ -f /tmp/mulacaida.txt ] && cat /tmp/mulacaida.txt
