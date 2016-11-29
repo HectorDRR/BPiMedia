@@ -91,7 +91,7 @@ def BorraVistos(Liberar = 20):
 	if type(Liberar) is str:
 		Liberar = float(Liberar)
 	lista = os.popen('sqlite3 /mnt/e/.mini/files.db "select path,sec,duration from bookmarks inner join details on bookmarks.id=details.id where path like \'/mnt/e/pasados/%\' order by path;"').read()
-	lista = filter(None, lista.split('\n'))
+	lista = list(filter(None, lista.split('\n')))
 	borrar = []
 	# Los imprimimos
 	for f in range(len(lista)):
