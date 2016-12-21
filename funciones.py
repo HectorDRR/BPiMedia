@@ -1137,7 +1137,7 @@ def Traspasa(Copio = 1, Monta = 1):
 		Log('No esta montado el pendrive', True)
 		if Copio:
 			exit(1)
-	#Cargamos las series que conocemos actualmente
+	#Cargamos las series que conocemos actualmente para no confundir las mayúsculas y minúsculas
 	os.chdir(env.MM + 'scaratulas')
 	Series = next(os.walk('.'))[2]
 	#Quitamos la extensión de la carátula
