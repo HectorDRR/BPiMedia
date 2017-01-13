@@ -17,6 +17,45 @@ import stat
 #Definición de variables para hacer la macro portable entre distintas configuraciones/plataformas
 import Entorno as env
 
+class Capitulo:
+	'Tratamiento de capítulos de series'
+	def __init__(self, Todo):
+		self.Todo = Todo
+		pp = re.compile(' \d+x\d\d ')
+		result = pp.split(Todo)
+		#Si obtenemos 2 pedazos al dividir la cadena siginifica que es una serie
+		if len(result) == 1:
+			self.ok = False
+			return
+		else:
+			self.Ok = True
+		self.Serie = result[0]
+		self.Titulo = result[1][:-4]
+		self.Temp = Todo[len(result[0])+1:Todo.find('x')]
+		self.Capi = Todo[Todo.find('x',len(result[0])+1)+1:Todo.find(' ',len(result[0])+1)]
+		self.Tipo = Todo[-3:]
+		print(self.__dict__)
+
+def BajaSeries():
+	""" Se conecta por FTP a la mula para comprobar si hay nuevos capítulos de las series que tenemos
+	en el curro y bajarse los que falten.
+	Tenemos pendiente implementar control de capítulos sobreescritos por problemas
+	Tenemos que tener en cuenta aquellas series que están enteras en el curro pero no en el servidor
+	Y también aquellas que ya no están en el servidor
+	"""
+	from ftplib import FTP
+	# Nos vamos a PASADOS
+	os.chdir(env.PASADOS)
+	# Obtenemos las series que estamos trayendo
+	listalocal = os.listdir()
+	# Ahora realizamos la conexión al servidor FTP
+	ftp = FTP()
+	ftp.connect('hrr.no-ip.info', 2211)
+	ftp.login('hector', '44celeborN')
+	ftp.cwd('pasados/')
+	listaremota = ftp.nlst()
+	
+	return
 def Borra(Liberar = 20, Dias = 30):
 	"""Se encarga de liberar espacio eliminando los ficheros más viejos que hay en las series sin
 	contar los que están en las series que vemos (env.SERIESVER) Por defecto, liberará 20 GB.
@@ -168,17 +207,21 @@ def CopiaNuevas(Pen):
 	# La ordenamos
 	series.sort()
 	for f in series:
+		# Metemos el capítulo en un objeto
+		capi = Capitulo(f)
+		# Si no es un capítulo pasamos al siguiente
+		if not capi.Ok continue
 		# Separamos el título de la serie del capítulo
-		nombre = Divide(f)
+		# nombre = Divide(f)
 		# comprobamos si es una de las que estamos copiando y la copiamos
-		if os.path.exists('z:\\' + nombre[0]):
+		if os.path.exists('z:\\' + capi.Serie):
 			# Si existe ya el fichero, lo omitimos. Más adelante comprobaremos fechas por si es uno arreglado
-			if not os.path.exists('z:\\' + nombre[0] + '\\' + f):
+			if not os.path.exists('z:\\' + capi.Serie + '\\' + capi.Todo):
 				if not Queda(f, 'z:\\'):
 					input('No queda espacio suficiente en Z:\, limpia')
 				# Lo copiamos
-				print('Copiando "' + f + '" a ' + nombre[0])
-				os.system('copy "' + f + '" "z:\\' + nombre[0] + '\\"')
+				print('Copiando "' + f + '" a ' + capi.Serie)
+				os.system('copy "' + f + '" "z:\\' + capi.Serie + '\\"')
 	# Nos pasamos a la carpeta de Pelis
 	os.chdir('../Pelis')
 	pelis = glob.glob('*.mkv')
@@ -921,6 +964,12 @@ def Para():
 	"""
 	for f in (range(1,len(sys.argv))):
 		print(str(f) + ': ' + sys.argv[f])
+
+def Prueba(Capi):
+	""" Para probar funciones que estamos desarrollando
+	"""
+	pp = Capitulo(Capi)
+	return
 
 def Queda(Fichero, Destino):
 	""" Función para comprobar, antes de copiar, si queda espacio suficiente en la carpeta de destino
