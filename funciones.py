@@ -14,16 +14,19 @@ import re
 import sys
 import stat
 
-#Definición de variables para hacer la macro portable entre distintas configuraciones/plataformas
-import Entorno as env
+# Definición de variables para hacer la macro portable entre distintas configuraciones/plataformas
+env = __import__('Entorno_' + sys.platform)
 
 class Capitulo:
 	'Tratamiento de capítulos de series'
 	def __init__(self, Todo):
+		""" Inicializamos las variables y dividimos el nombre del capítulo en sus componentes
+		"""
 		self.Todo = Todo
+		# Filtro para buscar donde está la numeración de la serie
 		pp = re.compile(' \d+x\d\d ')
 		result = pp.split(Todo)
-		#Si obtenemos 2 pedazos al dividir la cadena siginifica que es una serie
+		# Si obtenemos 2 pedazos al dividir la cadena siginifica que es una serie
 		if len(result) == 1:
 			self.ok = False
 			return
@@ -34,7 +37,43 @@ class Capitulo:
 		self.Temp = Todo[len(result[0])+1:Todo.find('x')]
 		self.Capi = Todo[Todo.find('x',len(result[0])+1)+1:Todo.find(' ',len(result[0])+1)]
 		self.Tipo = Todo[-3:]
-		print(self.__dict__)
+		# Para confirmar que los datos se están extrayendo correctamente 
+		# print(self.__dict__)
+
+	def Existe(self, Donde = None):
+		""" Para comprobar si la serie ya existe y procurar ponerle el mismo nombre que ya tiene
+		Si le pasamos un parámetro Donde, creamos la carpeta en la ruta pasada en dicha variable
+		"""
+		# Cargamos las series que conocemos actualmente para no confundir las mayúsculas y minúsculas
+		os.chdir(env.MM + 'scaratulas')
+		Series = next(os.walk('.'))[2]
+		# Quitamos la extensión de la carátula
+		Series = [f[0:-4] for f in Series]
+		# Si no existe la carpeta de la serie comprobamos mayúsculas y minúsculas y si no
+		if not os.path.exists(env.PASADOS + self.Serie):
+			# Comprobamos que no ha habido un error con las minúsculas y mayúsculas
+			for s in Series:
+				# Si el nombre en mayúsculas es igual, pero no lo es el original
+				if s.upper() == self.Serie.upper() and not s == self.Serie:	
+					NuevaS = s
+					# Renombramos el fichero original con el nombre que ha de tener
+					os.rename(self.Todo, self.Todo.replace(self.serie,s))
+					# Cambiamos también las variables
+					self.Todo = self.Todo.replace(self.serie,s)
+					self.Serie = s
+					# Consideramos que la serie existe
+					return True
+				else:
+					# Si no está la carpeta y el nombre tampoco está en las carátulas, concluimos que no existe
+					# Si hemos pasado segundo parámetro, creamos la carpeta
+					if Donde:
+						os.mkdir(Donde + self.Serie)
+						Log('No existe la carpeta de la serie ' + self.Serie + ', así que la creamos', True)
+					return False
+		else:
+			# Si está la carpeta asumimos que la serie existe
+			return True
+		return
 
 def BajaSeries():
 	""" Se conecta por FTP a la mula para comprobar si hay nuevos capítulos de las series que tenemos
@@ -190,7 +229,6 @@ def Copia():
 def CopiaNuevas(Pen):
 	""" Se encarga de copiar las pelis o series nuevas desde el pen a las carpetas que tengo en metal para distribuir 
 	a los aficionados del IAC
-	Partimos inicialmente de que las series vienen en avi y las pelis en mkv, aunque habrá que cambiar esto por JdT
 	"""
 	import glob
 	# Añadimos la carpeta Tarsi a la ruta
@@ -210,33 +248,34 @@ def CopiaNuevas(Pen):
 		# Metemos el capítulo en un objeto
 		capi = Capitulo(f)
 		# Si no es un capítulo pasamos al siguiente
-		if not capi.Ok continue
+		if not capi.Ok:
+			continue
 		# Separamos el título de la serie del capítulo
 		# nombre = Divide(f)
 		# comprobamos si es una de las que estamos copiando y la copiamos
-		if os.path.exists('z:\\' + capi.Serie):
+		if os.path.exists(env.SERIES + capi.Serie):
 			# Si existe ya el fichero, lo omitimos. Más adelante comprobaremos fechas por si es uno arreglado
-			if not os.path.exists('z:\\' + capi.Serie + '\\' + capi.Todo):
-				if not Queda(f, 'z:\\'):
-					input('No queda espacio suficiente en Z:\, limpia')
+			if not os.path.exists(env.SERIES + capi.Serie + '\\' + capi.Todo):
+				if not Queda(f, env.SERIES):
+					input('No queda espacio suficiente en la carpeta de Series, limpia')
 				# Lo copiamos
 				print('Copiando "' + f + '" a ' + capi.Serie)
-				os.system('copy "' + f + '" "z:\\' + capi.Serie + '\\"')
+				shutil.copy(f, env.SERIES + capi.Serie + '\\')
 	# Nos pasamos a la carpeta de Pelis
-	os.chdir('../Pelis')
+	os.chdir(env.HD)
 	pelis = glob.glob('*.mkv')
 	pelis.sort()
 	for f in pelis:
 		# Si existe ya el fichero, lo omitimos. Más adelante comprobaremos fechas por si es uno arreglado
-		if not os.path.exists('p:\\pelis\\' + f):
+		if not os.path.exists(env.HD + f):
 			# Comprobamos si queda espacio
-			if not Queda(f, 'p:\\'):
-				if input('No queda espacio suficiente en P:\, limpia') == 'n':
+			if not Queda(f, env.HD[0:2]):
+				if input('No queda espacio suficiente en ' + env.HD[0:2] + ', limpia') == 'n':
 					continue
 			# Lo copiamos y le ponemos el atributo de archivo para que lo manipule julito2
-			print('Copiando "' + f + '" a ' + 'p:\\pelis\\')
-			os.system('copy "' + f + '" p:\\pelis\\')
-			os.system('attrib +a "p:\\pelis\\' + f + '"')
+			print('Copiando "' + f + '" a ' + env.HD)
+			shutil.copy(f, env.HD)
+			os.system('attrib +a "' + env.HD + f + '"')
 	return
 	
 def CreaWeb(p1 = 'Ultimas', Pocas = 0):
@@ -969,6 +1008,7 @@ def Prueba(Capi):
 	""" Para probar funciones que estamos desarrollando
 	"""
 	pp = Capitulo(Capi)
+	print(pp.Existe())
 	return
 
 def Queda(Fichero, Destino):
@@ -1211,44 +1251,31 @@ def Traspasa(Copio = 1, Monta = 1):
 			except OSError as e:
 				Log('Ha ocurrido un error en la copia' + e.strerror, True)
 				continue
-		serie = Divide(f)
-		# Si nos devuelve una lista es que era una serie, en caso contrario, lo mandamos al temp
-		if type(serie) is list:
-			#Si no existe la carpeta de la serie comprobamos mayúsculas y minúsculas y si no, la creamos
-			if not os.path.exists(env.PASADOS + serie[0]):
-				#Comprobamos que no ha habido un error con las minúsculas y mayúsculas
-				for s in Series:
-					#Si el nombre en mayúsculas es igual, pero no lo es el original
-					if s.upper() == serie[0].upper() and not s == serie[0]:	
-						NuevaS = s
-						#Renombramos el fichero original con el nombre que ha de tener
-						os.rename(f, f.replace(serie[0],s))
-						#Cambiamos también las variables
-						f= f.replace(serie[0],s)
-						serie[0] = s
-				#Si después de chequear, no existe la carpeta en pasados, la creamos
-				if not os.path.exists(env.PASADOS + serie[0]):
-					Log('No existe la carpeta de la serie ' + serie[0] + ', así que la creamos', True)
-					os.mkdir(env.PASADOS + serie[0])
-			Log('Movemos el fichero a su carpeta')
-			# Si ya está en pasados la movemos al TEMP
-			if os.path.exists(env.PASADOS + serie[0] + '/' + f):
+		capi = Capitulo(f)
+		# Si es una serie lo procesamos, en caso contrario, lo mandamos al temp
+		if capi.Ok:
+			# Si existe la serie comprobamos mayúsculas y minúsculas y si no, la creamos
+			capi.Existe(env.PASADOS)
+			# Si ya está en pasados movemos la vieja al TEMP y ponemos la nueva en su lugar
+			if os.path.exists(env.PASADOS + capi.Serie + '/' + capi.Todo):
 				try:
-					shutil.move(f, env.TEMP)
+					shutil.move(env.PASADOS + capi.Serie + '/' + capi.Todo, env.TEMP)
+					Log('Movemos capítulo viejo %s al TEMP' % capi.Serie, True)
 				except OSError as e:
 					Log('Ha ocurrido un error al mover el fichero %s al TEMP' % e, True)
 					continue
-			else:
-				try:
-					shutil.move(f, env.PASADOS + serie[0])
-				except shutil.Error as e:
-					Log('Ha ocurrido un error al mover el fichero %s' % e, True, '[Error]')
-					continue
-				#Activamos el atributo u+x que equivale al de archivo de Windows. Así podemos controlar cuales son nuevos
-				#para su posterior paso a los discos USB, tanto desde Windows como desde la misma Banana
-				#Cambiamos los permisos a rwxrw-rw-
-				os.chmod(env.PASADOS + serie[0] + '/' + f, 0o766)
-				copiado = 1
+			# Movemos la serie a su carpeta
+			try:
+				shutil.move(f, env.PASADOS + capi.Serie)
+				Log('Movemos el fichero a su carpeta')
+			except shutil.Error as e:
+				Log('Ha ocurrido un error al mover el fichero %s' % e, True, '[Error]')
+				continue
+			#Activamos el atributo u+x que equivale al de archivo de Windows. Así podemos controlar cuales son nuevos
+			#para su posterior paso a los discos USB, tanto desde Windows como desde la misma Banana
+			#Cambiamos los permisos a rwxrw-rw-
+			os.chmod(env.PASADOS + capi.Serie + '/' + capi.Todo, 0o766)
+			copiado = 1
 		else:
 			#Si no es una serie lo pasamos a la carpeta otros
 			Log('Como parece que no es una serie, lo movemos a otros')
