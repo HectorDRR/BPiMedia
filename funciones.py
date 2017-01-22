@@ -28,7 +28,7 @@ class Capitulo:
 		result = pp.split(Todo)
 		# Si obtenemos 2 pedazos al dividir la cadena siginifica que es una serie
 		if len(result) == 1:
-			self.ok = False
+			self.Ok = False
 			return
 		else:
 			self.Ok = True
@@ -37,6 +37,7 @@ class Capitulo:
 		self.Temp = Todo[len(result[0])+1:Todo.find('x')]
 		self.Capi = Todo[Todo.find('x',len(result[0])+1)+1:Todo.find(' ',len(result[0])+1)]
 		self.Tipo = Todo[-3:]
+		self.ConSerie = self.Serie + env.DIR + self.Todo
 		# Para confirmar que los datos se están extrayendo correctamente 
 		# print(self.__dict__)
 
@@ -45,6 +46,8 @@ class Capitulo:
 		Si le pasamos un parámetro Donde, creamos la carpeta en la ruta pasada en dicha variable
 		"""
 		# Cargamos las series que conocemos actualmente para no confundir las mayúsculas y minúsculas
+		# Guardamos la carpeta actual
+		actual = os.getcwd()
 		os.chdir(env.MM + 'scaratulas')
 		Series = next(os.walk('.'))[2]
 		# Quitamos la extensión de la carátula
@@ -69,9 +72,13 @@ class Capitulo:
 					if Donde:
 						os.mkdir(Donde + self.Serie)
 						Log('No existe la carpeta de la serie ' + self.Serie + ', así que la creamos', True)
+					# Volvemos a la carpeta donde estábamos antes de llamar a esta función
+					os.chdir(actual)
 					return False
 		else:
 			# Si está la carpeta asumimos que la serie existe
+			# Volvemos a la carpeta donde estábamos antes de llamar a esta función
+			os.chdir(actual)
 			return True
 		return
 
@@ -262,7 +269,7 @@ def CopiaNuevas(Pen):
 				print('Copiando "' + f + '" a ' + capi.Serie)
 				shutil.copy(f, env.SERIES + capi.Serie + '\\')
 	# Nos pasamos a la carpeta de Pelis
-	os.chdir(env.HD)
+	os.chdir('..\\Pelis')
 	pelis = glob.glob('*.mkv')
 	pelis.sort()
 	for f in pelis:
@@ -1266,7 +1273,7 @@ def Traspasa(Copio = 1, Monta = 1):
 					continue
 			# Movemos la serie a su carpeta
 			try:
-				shutil.move(f, env.PASADOS + capi.Serie)
+				shutil.move(f, env.PASADOS + capi.Serie + env.DIR + capi.Todo)
 				Log('Movemos el fichero a su carpeta')
 			except shutil.Error as e:
 				Log('Ha ocurrido un error al mover el fichero %s' % e, True, '[Error]')
