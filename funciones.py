@@ -46,10 +46,7 @@ class Capitulo:
 		Si le pasamos un parámetro Donde, creamos la carpeta en la ruta pasada en dicha variable
 		"""
 		# Cargamos las series que conocemos actualmente para no confundir las mayúsculas y minúsculas
-		# Guardamos la carpeta actual
-		actual = os.getcwd()
-		os.chdir(env.MM + 'scaratulas')
-		Series = next(os.walk('.'))[2]
+		Series = next(os.walk(env.MM + 'scaratulas'))[2]
 		# Quitamos la extensión de la carátula
 		Series = [f[0:-4] for f in Series]
 		# Si no existe la carpeta de la serie comprobamos mayúsculas y minúsculas y si no
@@ -72,13 +69,9 @@ class Capitulo:
 					if Donde:
 						os.mkdir(Donde + self.Serie)
 						Log('No existe la carpeta de la serie ' + self.Serie + ', así que la creamos', True)
-					# Volvemos a la carpeta donde estábamos antes de llamar a esta función
-					os.chdir(actual)
 					return False
 		else:
 			# Si está la carpeta asumimos que la serie existe
-			# Volvemos a la carpeta donde estábamos antes de llamar a esta función
-			os.chdir(actual)
 			return True
 		return
 
