@@ -27,19 +27,21 @@ class Capitulo:
 		pp = re.compile(' \d+x\d\d ')
 		result = pp.split(Todo)
 		# Si obtenemos 2 pedazos al dividir la cadena siginifica que es una serie
-		if len(result) == 1:
-			self.Ok = False
-			return
-		else:
+		if len(result) > 1:
 			self.Ok = True
-		self.Serie = result[0]
-		self.Titulo = result[1][:-4]
-		self.Temp = Todo[len(result[0])+1:Todo.find('x')]
-		self.Capi = Todo[Todo.find('x',len(result[0])+1)+1:Todo.find(' ',len(result[0])+1)]
-		self.Tipo = Todo[-3:]
-		self.ConSerie = self.Serie + env.DIR + self.Todo
+			self.Serie = result[0]
+			self.Titulo = result[1][:-4]
+			self.Temp = Todo[len(result[0])+1:Todo.find('x')]
+			self.Capi = Todo[Todo.find('x',len(result[0])+1)+1:Todo.find(' ',len(result[0])+1)]
+			self.Tipo = Todo[-3:]
+			# Limpiamos el nombre del capítulo
+			self.Limpia()
+			self.ConSerie = self.Serie + env.DIR + self.Todo
+		else:
+			self.Ok = False
 		# Para confirmar que los datos se están extrayendo correctamente 
-		# print(self.__dict__)
+		#print(self.__dict__)
+		return
 
 	def Existe(self, Donde = None):
 		""" Para comprobar si la serie ya existe y procurar ponerle el mismo nombre que ya tiene
@@ -73,6 +75,24 @@ class Capitulo:
 		else:
 			# Si está la carpeta asumimos que la serie existe
 			return True
+		return
+		
+	def Limpia(self):
+		""" Limpiamos el nombre del capítulo para quitar lo incluido entre corchetes
+		"""
+		donde = self.Titulo.find('[')
+		if (donde >= 0):
+			#Si hay un espacio antes del corchete también lo eliminamos
+			if self.Titulo[donde-1] == ' ':
+				donde -= 1
+			sinf = self.Serie + ' ' + self.Temp + 'x' + self.Capi + ' ' + self.Titulo[0:donde] + '.' + self.Tipo
+			try:
+				os.rename(self.Todo, sinf)
+			except OSError as e:
+				print('Ha ocurrido un error renombrando el fichero ' + sinf + ': ' + e.strerror)
+			# Log('Limpiamos el nombre del fichero %s a %s' % (f, sinf))
+			self.Titulo = self.Titulo[0:donde]
+			self.Todo = sinf
 		return
 
 def BajaSeries():
@@ -131,6 +151,8 @@ def Borra(Liberar = 20, Dias = 30):
 	if Liberar > libre:
 		BorraVistos(Liberar)
 	os.system("/home/hector/bin/compartidos")
+	# Eliminamos las carpetas sin serie
+	LimpiaPasados()
 	return
 
 def Borra2(borrar, Liberar, Preg=False):
@@ -239,9 +261,9 @@ def CopiaNuevas(Pen):
 		return
 	# Nos pasamos al directorio origen
 	os.chdir(Pen)
-	# Cargamos la lista de series, tanto en avi como en mkv
-	series = glob.glob('*.avi')
-	series.extend(glob.glob('*.mkv'))
+	# Cargamos la lista de ficheros del pen, independientemente de su extensión para también copiar los .srt u otros
+	# que puedan surgir
+	series = glob.glob('*')
 	# La ordenamos
 	series.sort()
 	for f in series:
@@ -842,10 +864,13 @@ def LimpiaPasados():
 		os.chdir('..')
 		# Si no hay capítulos
 		if capi == 0:
+			# Mostramos el contenido de la carpeta
+			print(next(os.walk('.'))[2])
 			if input('¿Borramos la carpeta "' + f + '"? (s/N)') == 's':
 				# Borramos la carpeta
 				print('Carpeta "' + f + '" borrada')
 				shutil.rmtree(f)
+	return
 
 def ListaCapitulos(Serie, Ruta):
 	""" Se encarga de revisar los capítulos de una serie dada para sacar un resumen de los mismos y 
@@ -999,7 +1024,7 @@ def ObtenLista(Ulti = 0):
 	return pelis
 
 def Para():
-	""" Se encarga de imprimir los parápetros pasados a funciones.py para depurar algún posible error
+	""" Se encarga de imprimir los parámetros pasados a funciones.py para depurar algún posible error
 	"""
 	for f in (range(1,len(sys.argv))):
 		print(str(f) + ': ' + sys.argv[f])
@@ -1241,7 +1266,8 @@ def Traspasa(Copio = 1, Monta = 1):
 	#Cogemos cada fichero de la lista, lo copiamos al Pen y luego lo movemos a su respectiva carpeta en pasados
 	for f in filenames:
 		Log('Procesamos y copiamos el fichero ' + f, True)
-		f = Limpia(f)
+		# Lo hemos implementado dentro de la inicialización de la clase
+		#f = Limpia(f)
 		if Copio:
 			# Si no queda espacio en destino pasamos al siguiente
 			if not Queda(f, env.PENTEMP + 'Series'):
