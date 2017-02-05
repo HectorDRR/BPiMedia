@@ -23,16 +23,27 @@ class Capitulo:
 		""" Inicializamos las variables y dividimos el nombre del capítulo en sus componentes
 		"""
 		self.Todo = Todo
-		# Filtro para buscar donde está la numeración de la serie
-		pp = re.compile(' \d+x\d\d ')
+		# Filtro para buscar donde está la numeración de la serie. Teniendo en cuenta que algunos capítutlos no tienen título
+		# y viene un '.' directamente después del número del capítulo
+		pp = re.compile(' \d+x\d\d(?:-\d\d)?')
 		result = pp.split(Todo)
 		# Si obtenemos 2 pedazos al dividir la cadena siginifica que es una serie
 		if len(result) > 1:
 			self.Ok = True
 			self.Serie = result[0]
-			self.Titulo = result[1][:-4]
+			# En caso de que haya título, habrá un espacio antes de su comienzo, así que lo suprimimos
+			if result[1][0] == ' ':
+				espacio = 1
+			else:
+				espacio = 0
+			self.Titulo = result[1][espacio:-4]
 			self.Temp = Todo[len(result[0])+1:Todo.find('x')]
-			self.Capi = Todo[Todo.find('x',len(result[0])+1)+1:Todo.find(' ',len(result[0])+1)]
+			# Si no tiene título buscamos el '.'. En caso contrario, buscamos el primer espacio
+			if len(self.Titulo) == 0:
+				buscar = '.'
+			else:
+				buscar = ' '
+			self.Capi = Todo[Todo.find('x',len(result[0])+1)+1:Todo.find(buscar,len(result[0])+1)]
 			self.Tipo = Todo[-3:]
 			# Limpiamos el nombre del capítulo
 			self.Limpia()
@@ -43,39 +54,27 @@ class Capitulo:
 		#print(self.__dict__)
 		return
 
-	def Existe(self, Donde = None):
+	def Existe(self):
 		""" Para comprobar si la serie ya existe y procurar ponerle el mismo nombre que ya tiene
-		Si le pasamos un parámetro Donde, creamos la carpeta en la ruta pasada en dicha variable
 		"""
 		# Cargamos las series que conocemos actualmente para no confundir las mayúsculas y minúsculas
 		Series = next(os.walk(env.MM + 'scaratulas'))[2]
 		# Quitamos la extensión de la carátula
 		Series = [f[0:-4] for f in Series]
-		# Si no existe la carpeta de la serie comprobamos mayúsculas y minúsculas y si no
-		if not os.path.exists(env.PASADOS + self.Serie):
-			# Comprobamos que no ha habido un error con las minúsculas y mayúsculas
-			for s in Series:
-				# Si el nombre en mayúsculas es igual, pero no lo es el original
-				if s.upper() == self.Serie.upper() and not s == self.Serie:	
-					NuevaS = s
-					# Renombramos el fichero original con el nombre que ha de tener
-					os.rename(self.Todo, self.Todo.replace(self.serie,s))
-					# Cambiamos también las variables
-					self.Todo = self.Todo.replace(self.serie,s)
-					self.Serie = s
-					# Consideramos que la serie existe
-					return True
-				else:
-					# Si no está la carpeta y el nombre tampoco está en las carátulas, concluimos que no existe
-					# Si hemos pasado segundo parámetro, creamos la carpeta
-					if Donde:
-						os.mkdir(Donde + self.Serie)
-						Log('No existe la carpeta de la serie ' + self.Serie + ', así que la creamos', True)
-					return False
-		else:
-			# Si está la carpeta asumimos que la serie existe
-			return True
-		return
+		# Comprobamos que no ha habido un error con las minúsculas y mayúsculas
+		for s in Series:
+			# Si el nombre en mayúsculas es igual, pero no lo es el original
+			if s.upper() == self.Serie.upper() and not s == self.Serie:	
+				# Renombramos el fichero original con el nombre que ha de tener
+				os.rename(self.Todo, self.Todo.replace(self.Serie,s))
+				# Cambiamos también las variables
+				self.Todo = self.Todo.replace(self.Serie,s)
+				self.ConSerie = self.ConSerie.replace(self.Serie,s)
+				self.Serie = s
+				# Consideramos que la serie existe
+				return True
+		# Si llegamos hasta aquí es que no existe la carpeta ni hay un error en mayúsculas/minúsculas
+		return False
 		
 	def Limpia(self):
 		""" Limpiamos el nombre del capítulo para quitar lo incluido entre corchetes
@@ -115,7 +114,7 @@ def BajaSeries():
 	listaremota = ftp.nlst()
 	
 	return
-def Borra(Liberar = 20, Dias = 30):
+def Borra(Liberar = 30, Dias = 30):
 	"""Se encarga de liberar espacio eliminando los ficheros más viejos que hay en las series sin
 	contar los que están en las series que vemos (env.SERIESVER) Por defecto, liberará 20 GB.
 	"""
@@ -186,7 +185,7 @@ def Borra2(borrar, Liberar, Preg=False):
 			Log('Se borró correctamente ' + f, True)
 	return libre
 
-def BorraVistos(Liberar = 20):
+def BorraVistos(Liberar = 30):
 	# Obtenemos el listado de ficheros con bookmarks y con su duración
 	if type(Liberar) is str:
 		Liberar = float(Liberar)
@@ -1280,19 +1279,24 @@ def Traspasa(Copio = 1, Monta = 1):
 		capi = Capitulo(f)
 		# Si es una serie lo procesamos, en caso contrario, lo mandamos al temp
 		if capi.Ok:
-			# Si existe la serie comprobamos mayúsculas y minúsculas y si no, la creamos
-			capi.Existe(env.PASADOS)
+			# Si no existe la carpeta de la serie, comprobamos mayúsculas y minúsculas y la creamos
+			if not os.path.exists(env.PASADOS + capi.Serie):
+				capi.Existe()
+				# Como puede haber habido un error de may/min volvemos a chequear si existe la carpeta
+				if not os.path.exists(env.PASADOS + capi.Serie):
+					os.mkdir(env.PASADOS + capi.Serie)
+					Log('No existe la carpeta de la serie ' + capi.Serie + ', así que la creamos', True)
 			# Si ya está en pasados movemos la vieja al TEMP y ponemos la nueva en su lugar
 			if os.path.exists(env.PASADOS + capi.Serie + '/' + capi.Todo):
 				try:
 					shutil.move(env.PASADOS + capi.Serie + '/' + capi.Todo, env.TEMP)
-					Log('Movemos capítulo viejo %s al TEMP' % capi.Serie, True)
+					Log('Movemos capítulo viejo %s al TEMP' % capi.Todo, True)
 				except OSError as e:
 					Log('Ha ocurrido un error al mover el fichero %s al TEMP' % e, True)
 					continue
 			# Movemos la serie a su carpeta
 			try:
-				shutil.move(f, env.PASADOS + capi.Serie + env.DIR + capi.Todo)
+				shutil.move(capi.Todo, env.PASADOS + capi.Serie + env.DIR + capi.Todo)
 				Log('Movemos el fichero a su carpeta')
 			except shutil.Error as e:
 				Log('Ha ocurrido un error al mover el fichero %s' % e, True, '[Error]')
@@ -1306,12 +1310,12 @@ def Traspasa(Copio = 1, Monta = 1):
 			#Si no es una serie lo pasamos a la carpeta otros
 			Log('Como parece que no es una serie, lo movemos a otros')
 			try:
-				shutil.move(f, env.TEMP)
+				shutil.move(capi.Todo, env.TEMP)
 			except OSError as e:
 				Log('Ha ocurrido un error al mover el fichero %s' % e, True)
 				continue
 			#Cambiamos los permisos a rwxrw-rw-
-			os.chmod(env.TEMP + f,0o766)
+			os.chmod(env.TEMP + Capi.Todo,0o766)
 			copiado = 1
 	#Por último, le decimos al amule que vuelva a cargar los compartidos para que se de cuenta 
 	#que lo que antes estaba en Series ahora está en pasados y si se han creados nuevas carpetas
