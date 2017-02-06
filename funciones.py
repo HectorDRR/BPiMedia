@@ -1265,38 +1265,38 @@ def Traspasa(Copio = 1, Monta = 1):
 	#Cogemos cada fichero de la lista, lo copiamos al Pen y luego lo movemos a su respectiva carpeta en pasados
 	for f in filenames:
 		Log('Procesamos y copiamos el fichero ' + f, True)
-		# Lo hemos implementado dentro de la inicialización de la clase
-		#f = Limpia(f)
-		if Copio:
-			# Si no queda espacio en destino pasamos al siguiente
-			if not Queda(f, env.PENTEMP + 'Series'):
-				continue
-			try:
-				shutil.copy(f,env.PENTEMP + 'Series')
-			except OSError as e:
-				Log('Ha ocurrido un error en la copia' + e.strerror, True)
-				continue
 		capi = Capitulo(f)
 		# Si es una serie lo procesamos, en caso contrario, lo mandamos al temp
 		if capi.Ok:
 			# Si no existe la carpeta de la serie, comprobamos mayúsculas y minúsculas y la creamos
 			if not os.path.exists(env.PASADOS + capi.Serie):
 				capi.Existe()
-				# Como puede haber habido un error de may/min volvemos a chequear si existe la carpeta
-				if not os.path.exists(env.PASADOS + capi.Serie):
-					os.mkdir(env.PASADOS + capi.Serie)
-					Log('No existe la carpeta de la serie ' + capi.Serie + ', así que la creamos', True)
+		if Copio:
+			# Si no queda espacio en destino pasamos al siguiente
+			if not Queda(capi.Todo, env.PENTEMP + 'Series'):
+				continue
+			try:
+				shutil.copy(capi.Todo, env.PENTEMP + 'Series')
+			except OSError as e:
+				Log('Ha ocurrido un error en la copia' + e.strerror, True)
+				continue
+		# Si es una serie lo procesamos, en caso contrario, lo mandamos al temp
+		if capi.Ok:
+			# Como puede haber habido un error de may/min volvemos a chequear si existe la carpeta. Si no existe, la creamos
+			if not os.path.exists(env.PASADOS + capi.Serie):
+				os.mkdir(env.PASADOS + capi.Serie)
+				Log('No existe la carpeta de la serie ' + capi.Serie + ', así que la creamos', True)
 			# Si ya está en pasados movemos la vieja al TEMP y ponemos la nueva en su lugar
-			if os.path.exists(env.PASADOS + capi.Serie + '/' + capi.Todo):
+			if os.path.exists(env.PASADOS + capi.ConSerie):
 				try:
-					shutil.move(env.PASADOS + capi.Serie + '/' + capi.Todo, env.TEMP)
+					shutil.move(env.PASADOS + capi.ConSerie, env.TEMP)
 					Log('Movemos capítulo viejo %s al TEMP' % capi.Todo, True)
 				except OSError as e:
 					Log('Ha ocurrido un error al mover el fichero %s al TEMP' % e, True)
 					continue
 			# Movemos la serie a su carpeta
 			try:
-				shutil.move(capi.Todo, env.PASADOS + capi.Serie + env.DIR + capi.Todo)
+				shutil.move(capi.Todo, env.PASADOS + capi.ConSerie)
 				Log('Movemos el fichero a su carpeta')
 			except shutil.Error as e:
 				Log('Ha ocurrido un error al mover el fichero %s' % e, True, '[Error]')
@@ -1304,7 +1304,7 @@ def Traspasa(Copio = 1, Monta = 1):
 			#Activamos el atributo u+x que equivale al de archivo de Windows. Así podemos controlar cuales son nuevos
 			#para su posterior paso a los discos USB, tanto desde Windows como desde la misma Banana
 			#Cambiamos los permisos a rwxrw-rw-
-			os.chmod(env.PASADOS + capi.Serie + '/' + capi.Todo, 0o766)
+			os.chmod(env.PASADOS + capi.ConSerie, 0o766)
 			copiado = 1
 		else:
 			#Si no es una serie lo pasamos a la carpeta otros
