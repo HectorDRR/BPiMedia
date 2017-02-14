@@ -36,3 +36,5 @@ SISTEMA = 'Linux'
 DEL = 'rm '
 #Separa Directorios
 DIR = '/'
+#Para cambiar permisos/Atributos. Pendiente de implementar
+ATTRIB = 'chmod '

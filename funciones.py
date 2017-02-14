@@ -149,7 +149,8 @@ def Borra(Liberar = 30, Dias = 30):
 	# Si no hemos conseguido liberar el espacio solicitado pasamos a las series ya vistas
 	if Liberar > libre:
 		BorraVistos(Liberar)
-	os.system("/home/hector/bin/compartidos")
+	else:
+		os.system("/home/hector/bin/compartidos")
 	# Eliminamos las carpetas sin serie
 	LimpiaPasados()
 	return
@@ -192,9 +193,6 @@ def BorraVistos(Liberar = 30):
 	lista = os.popen('sqlite3 /mnt/e/.mini/files.db "select path,sec,duration from bookmarks inner join details on bookmarks.id=details.id where path like \'/mnt/e/pasados/%\' order by path;"').read()
 	lista = list(filter(None, lista.split('\n')))
 	borrar = []
-	# Los imprimimos
-	for f in range(len(lista)):
-		print('{0:2d} '.format(f) + lista[f])
 	# Seleccionamos los que han sido vistos más de un 95% o tiene un 0 que indica que se han visto completamente o que apenas se han empezado a ver
 	for f in lista:
 		ruta, bookmark, duracion = f.split('|')
@@ -207,8 +205,11 @@ def BorraVistos(Liberar = 30):
 		for f in range(len(borrar)):
 			print('{0:2d} '.format(f) + borrar[f])
 		# Preguntamos si realmente los queremos borrar
-		if input('Procedemos?').upper() == 'N':
+		que = input('Procedemos?').upper()
+		if que == 'N':
 			return
+		if que.isnumeric():
+			del borrar[0:int(que)]
 		Borra2(borrar, Liberar, True)
 		# Actualizamos en el aMule la lista de ficheros compartidos
 		os.system("/home/hector/bin/compartidos")
@@ -271,8 +272,6 @@ def CopiaNuevas(Pen):
 		# Si no es un capítulo pasamos al siguiente
 		if not capi.Ok:
 			continue
-		# Separamos el título de la serie del capítulo
-		# nombre = Divide(f)
 		# comprobamos si es una de las que estamos copiando y la copiamos
 		if os.path.exists(env.SERIES + capi.Serie):
 			# Si existe ya el fichero, lo omitimos. Más adelante comprobaremos fechas por si es uno arreglado
@@ -411,7 +410,7 @@ def CreaWeb(p1 = 'Ultimas', Pocas = 0):
 		if Pocas:
 			curro = Divide(peli)
 			if type(curro) is list:
-				disco = peli[len(curro[0]):len(curro[0])+6] + curro[1]
+				disco = peli[len(curro[0])+1:]
 				peli = curro[0]
 				ser = 's'
 		# Si trabajamos con series dejamos el título tal cual, en caso de pelis, quitamos la extensión para buscar la carátula
@@ -486,42 +485,12 @@ def CreaWeb(p1 = 'Ultimas', Pocas = 0):
 		os.system(env.DEL + env.TMP + p1)
 	return
 
-def Depura(Origen):
-	""" Para cambiar las carátulas y Msheets de manera que coincidan en las mayúsculas y minúsculas
-	"""
-	# Primero leemos las Series
-	with open(Origen) as f:
-		lista = f.readlines()
-	# Nos quedamos solo con el nombre de la Serie
-	lista = [x[:x.find(':')] for x in lista]
-	# Obtenemos la lista de ficheros de la carpeta actual
-	pp = sorted(next(os.walk('.'))[2])
-	# Comprobamos cada fichero con la lista
-	item = 0
-	# Si las dos en mayúsculas son iguales
-	for f in pp:
-		while not f.upper().startswith(lista[item].upper()):
-			# Si no son iguales avanzo a la siguiente serie
-			item += 1
-			if item == len(lista):
-				item = 0
-				print('No encontramos ' + f)
-				break
-		if f.upper().startswith(lista[item].upper()):
-			# Si no son iguales en minúsculas
-			if not f.startswith(lista[item]):
-				# Creo el nuevo nombre
-				nuevo = f.replace(f[:len(lista[item])],lista[item])
-				# Cambio nombre al fichero
-				os.system('mv "' + f + '" "' + nuevo + '"')
-	return
-	
 def Divide(Serie):
 	"""Dividimos un nombre de serie dividido en Serie y capítulo. Si obtenemos 2 pedazos al 
 	dividir la cadena devolvemos la Serie y el título del capítulo en una lista. Si no, devolvemos la
 	cadena que nos mandaron
 	"""
-	pp = re.compile(' \d+x\d\d')
+	pp = re.compile(' \d+x\d\d(?:-\d\d)?')
 	Result = pp.split(Serie)
 	#Si obtenemos 2 pedazos al dividir la cadena siginifica que es una serie
 	if len(Result)>1:
@@ -546,16 +515,20 @@ def Etiqueta(Ruta):
 		Etiq = Etiq[Etiq.find('[')+1:-2]
 	return Etiq
 
-def GeneraLista(Listado, pelis, serie = 0):
+def GeneraLista(Listado, Pelis, Serie = False):
 	""" Pequeña función para generar la lista de películas o series con sus comentarios si los hubiera.
 	La separamos de la función principal para poder llamarla cuando realizamos la lista de últimas
+	
+	Listado contiene el nombre del fichero donde se va a almacenar la lista
+	Pelis es una lista con los elementos a tratar
+	Serie es un booleano que nos indica si se trata de una serie (True) o no (False)
 	"""
 	# Procesamos la lista añadiendo los comentarios si los hubiera
 	with open(env.PLANTILLAS + Listado.replace(':',''), 'w') as file:
-		for f in pelis:
+		for f in Pelis:
 			comen = ''
 			# Si se trata de series, cambiamos algunas cosas
-			if serie:
+			if Serie:
 				que = f + '/' + f + '.'
 				capis = ':' + ListaCapitulos(f, Listado[-2:] + '/Series/')
 			else:
@@ -593,9 +566,9 @@ def GuardaHD():
 	CreaWeb('Pelis')
 	# Limpiamos las carátulas que hayan quedado en la carpeta env.HD
 	LimpiaHD()
-	GuardaLibre(env.HDG)
+	Etiq = GuardaLibre(env.HDG)
 	# Paramos el disco duro por si lo hemos dejado copiando. El parámetro -Sx establece en x*5 segundos el tiempo de inactividad antes de pararse
-	os.system('cd &&sleep 3&&sudo hdparm -S3 /dev/disk/by-label/HD-TB2-3&&sudo umount /mnt/HD')
+	os.system('cd &&sleep 3&&sudo hdparm -S3 /dev/disk/by-label/' + Etiq + ' &&sudo umount /mnt/HD')
 	return
 
 def GuardaLibre(Ruta):
@@ -626,7 +599,7 @@ def GuardaLibre(Ruta):
 		for f in lista:
 			file.write(f + '\n')
 	print('Libre en ' + linea)
-	return
+	return Etiq
 
 def GuardaPelis(Cuales, Que):
 	""" Macro para guardar las pelis adultas o infantiles en los discos duros correspondientes
@@ -666,20 +639,17 @@ def GuardaPelis(Cuales, Que):
 	Log('Hemos terminado de copiar las pelis HD', True)
 	return
 
-def GuardaSeries(Ruta, deb = '0'):
-	""" Se encarga de pasar las series y películas a los discos externos USB para su almacenamiento
-		Empezaremos solo por las pelis por ser más sencillo su tratamiento
+def GuardaSeries(Ruta, deb = False):
+	""" Se encarga de pasar las series a los discos externos USB para su almacenamiento
 		Si la llamamos con deb = True la ponemos en modo depuración para que 
 		no haga efecto sino muestre lo que va a hacer
 	"""
 	lista = []
-	Log('Comenzamos la copia de las Series ' + Ruta + deb, True)
-	while True:
-		if not os.path.exists(env.SERIESG + Ruta + '/Series/'):
+	Log('Comenzamos la copia de las Series ' + Ruta, True)
+	# Confirmamos que está montado el disco de destino, y si no, lo montamos
+	while not os.path.exists(env.SERIESG + Ruta + '/Series/'):
 			os.system('sudo mount ' + env.SERIESG + Ruta)
 			time.sleep(3)
-		else:
-			break
 	# Nos vamos a la carpeta de las Series
 	os.chdir(env.PASADOS)
 	# Generamos la lista de las series que ya han pasado por el pen y aún no han sido copiadas u+rwx
@@ -700,20 +670,15 @@ def GuardaSeries(Ruta, deb = '0'):
 		print('{0:2d} '.format(f) + lista[f])
 	# Cogeremos cada capítulo y lo copiaremos al disco
 	for serie in lista:
-		Log('Copiamos la Serie ' + str(lista.index(serie)+1) + ' de ' + str(len(lista)) + ': ' + serie[serie.find('/')+1:] + ' a la ruta ' + env.SERIESG + Ruta + '/Series/' + serie, True)
-		if not deb == '0':
+		Log('Copiamos la Serie ' + str(lista.index(serie)+1) + ' de ' + str(len(lista)) + ' a la ruta ' + env.SERIESG + Ruta + '/Series/' + serie, True)
+		if deb:
 			print(serie, env.SERIESG + Ruta + '/Series/' + serie)
 		else:
 			# En caso de estar copiando la carátula y la Sheet de la serie, dividimos nosotros el nombre. En caso contrario genera una carpeta 'f'
-			# Restructuramos el código. Ya que en la lista ya viene el nombre de la carpeta, no usamos la función Divide y así
-			# tratamos por igual las sheet (folder*.jpg) y los subtítulos (*.rar)
-			#if serie[-3:] == 'jpg' or serie[-3:] == 'rar':
+			# Tratamos por igual las sheet (folder*.jpg) y los subtítulos (*.rar)
 			ser = []
 			ser.append(serie[:serie.find('/')])
 			ser.append(serie[serie.find('/')+1:])
-			#else:
-			#	ser = serie[serie.find('/')+1:]
-			#	ser = Divide(ser)
 			if not os.path.exists(env.SERIESG + Ruta + '/Series/' + ser[0]):
 				Log('No existe la carpeta de la serie ' + serie + ', así que la creamos', True)
 				try:
@@ -733,7 +698,7 @@ def GuardaSeries(Ruta, deb = '0'):
 				Log('Ha ocurrido un error copiando la serie %s. Error: %s' % (serie, e.strerror), True)
 				continue
 		# Cambiamos los permisos para marcarla como ya copiada rw-r--r--
-		if not deb == '0':
+		if deb:
 			print('cambiamos permisos a ' + serie)
 		else:
 			os.chmod(serie,0o644)
@@ -742,7 +707,7 @@ def GuardaSeries(Ruta, deb = '0'):
 	GuardaLibre(env.SERIESG + Ruta + '/')
 	ListaSeries(Ruta)
 	CreaWeb('Series')
-	os.system('cd &&sleep 5&&sudo umount ' + env.SERIESG + Ruta)
+	os.system('sudo umount ' + env.SERIESG + Ruta)
 	return
 
 def JTrailer(Peli, Debug = 0):
@@ -877,8 +842,6 @@ def ListaCapitulos(Serie, Ruta):
 	
 	Para que esta función funcione correctamente será necesario asegurarse de que la nomenclatura de
 	los capítulos es homogénea, y no tenemos mezcla de mayúsculas o minúsculas así como otras alteraciones
-	
-	También hay que tener en cuenta los capítulos dobles tipo 3x12-13, que por ahora no son tratados
 	"""
 	import glob
 	os.chdir(env.SERIESG + Ruta + Serie)
@@ -888,19 +851,17 @@ def ListaCapitulos(Serie, Ruta):
 	lista.sort
 	donde = len(Serie) + 1
 	# Primero separamos la serie del capítulo para poder quedarnos solo con la temporada y el capítulo
-	# Asumimos por ahora solo hasta 9 temporadas. Más adelante habrá que cambiarlo para soportar >= 0
 	caps = [f[donde:f.find(' ', donde)] for f in lista]
 	for f in caps:
 		if f.find('.') > 0:
 			caps[caps.index(f)] = f[0:f.find('.')]
-	#caps = [f[0:f.find('.')] for f in caps if f.find('.')]
 	# Por si acaso las series no se llaman igual, ordenamos la lista
 	caps.sort()
 	# Ahora toca recorrer la lista separando temporadas, quedándonos con el primer y último capítulo
 	# y también informar si nos saltamos alguno
 	# cogemos la información de la primera temporada y el primer capítulo almacenado
+	tem = caps[0][0:caps[0].find('x')]
 	print(caps, Serie)
-	tem = caps[0][0]
 	# Le restamos 1 al capítulo para que haya una secuencia válida. No empezamos por 0 puesto que hay series
 	# que parte están grabadas en CD, no en disco duro
 	capi = int(caps[0][-2:]) - 1
@@ -908,10 +869,10 @@ def ListaCapitulos(Serie, Ruta):
 	saltados = ''
 	for f in caps:
 		# Si hemos cambiado de temporada
-		if not tem == f[0]:
+		if not tem == f[0:f.find('x')]:
 			# Ponemos en el resumen el capítulo final de la temporada anterior y el primero de la actual
 			resumen = resumen + '{0:02d} '.format(capi) + ', ' + f + ' - '
-			tem = f[0]
+			tem = f[0:f.find('x')]
 			capi = 0
 			if int(f[-2:]) == 0:
 				capi = -1
@@ -979,9 +940,16 @@ def ListaSeries(Ruta=''):
 	El fichero con la lista se almacena en env.PLANTILLAS
 	"""
 	if os.path.exists(env.SERIESG + Ruta + '/Series'):
+		# Guardamos la carpeta donde estamos
+		pop = os.getcwd()
+		# Nos vamos a la carpeta raíz de las series
 		os.chdir(env.SERIESG + Ruta + '/Series')
+		# Obtenemos lalista de las series
 		series = sorted(next(os.walk('.'))[1])
 		GeneraLista('Series_' + Ruta, series, True)
+		# Volvemos a la carpeta inicial
+		os.chdir(pop)
+	# Mostramos al final los capítulos que faltan
 	os.system('cat ' + env.PLANTILLAS + 'Series_' + Ruta + '|grep Faltan')
 	return
 	
@@ -1007,10 +975,7 @@ def ObtenLista(Ulti = 0):
 			pelis = list(filter(None,os.popen('dir /b *.mkv *.mp4 *.wmv *.avi' + cuales).read().split('\n')))
 			return pelis
 	# Generamos la lista teniendo en cuenta las distintas extensiones
-	pelis = glob.glob('*.mkv')
-	pelis.extend(glob.glob('*.wmv'))
-	pelis.extend(glob.glob('*.mp4'))
-	pelis.extend(glob.glob('*.avi'))
+	pelis = glob.glob('*.mkv') + glob.glob('*.wmv') + glob.glob('*.mp4') + glob.glob('*.avi')
 	# La lista de las carpetas. Tenemos un problema cuando la carpeta está vacía, aunque desconozco el porqué.
 	carpetas = next(os.walk('.'))[1]
 	if len(carpetas) > 0:
@@ -1088,14 +1053,14 @@ def Renombra(Viejo, Nuevo):
 			print('Cambiando ' + f + ' por ' + f.replace(Viejo, Nuevo))
 			os.rename(f, f.replace(Viejo, Nuevo))
 	if env.SISTEMA == 'Windows':
-		os.system('dir *' + Nuevo + '*')
+		os.system('dir "*' + Nuevo + '*"')
 	else:
-		os.system('ls *' + Nuevo + '*')
+		os.system('ls "*' + Nuevo + '*"')
 	return
 
 def RenPeli(P1, P2):
 	"""Se encarga de renombrar todos los ficheros relacionados con una película para el caso de que haya habido algún 
-	problema con su nombreclatura
+	problema con su nomenclatura
 	P1 = Nombre erróneo
 	P2 = Nombre correcto
 	"""
@@ -1109,13 +1074,13 @@ def RenPeli(P1, P2):
 	Renombra(P1, P2)
 	return
 
-def RenSerie(P1, P2, Todo = 0, Ruta = env.PASADOS):
+def RenSerie(P1, P2, Ruta = env.PASADOS, Todo = 0):
 	"""Se encarga de renombrar todos los ficheros de una serie para el caso de que haya habido algún 
 	problema con su nombreclatura
 	P1 = Nombre erróneo de la serie
 	P2 = Nombre correcto
-	Todo = Si a uno, también renombramos los metadatos, carátula y Msheets
 	Ruta = Si no se especifica, asumimos que estamos en env.PASADOS. Tiene que contener el '/' final
+	Todo = Si a uno, también renombramos los metadatos, carátula y Msheets
 	"""
 	import glob
 	print(P1, P2, Todo, Ruta)
