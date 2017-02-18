@@ -1280,7 +1280,7 @@ def Traspasa(Copio = 1, Monta = 1):
 				Log('Ha ocurrido un error al mover el fichero %s' % e, True)
 				continue
 			#Cambiamos los permisos a rwxrw-rw-
-			os.chmod(env.TEMP + Capi.Todo,0o766)
+			os.chmod(env.TEMP + capi.Todo, 0o766)
 			copiado = 1
 	#Por último, le decimos al amule que vuelva a cargar los compartidos para que se de cuenta 
 	#que lo que antes estaba en Series ahora está en pasados y si se han creados nuevas carpetas
