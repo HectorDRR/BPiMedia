@@ -607,8 +607,10 @@ def GuardaPelis(Cuales, Que):
 		Que se corresponde con los permisos que las distinguen, ?66 en el caso de las pelis y 
 		?46 en el caso de las infantiles por lo que solo mandamos el permiso de grupo, 6 o 4.
 	"""
+	# Encendemos el led
+	os.system('/home/hector/bin/ledonoff heartbeat')
 	# Generamos la lista de las pelis que no se han pasado copiado rw?r?-rw-
-	#Más adelante, aprenderemos como hacer esto desde el mismo Python sin tener que recurrir al find
+	# Más adelante, aprenderemos como hacer esto desde el mismo Python sin tener que recurrir al find
 	salida = os.popen("find . -type f -name '*.mkv' -perm 7" + Que + "6 -o -perm 6" + Que + "6").read()
 	# Convertimos en lista y quitamos elementos nulos
 	lista = sorted(filter(None, salida.split('\n')))
@@ -637,6 +639,7 @@ def GuardaPelis(Cuales, Que):
 		os.chmod(peli, per.st_mode | stat.S_IRWXG | stat.S_IRWXO)
 		Log('Se ha copiado la película ' + peli)
 	Log('Hemos terminado de copiar las pelis HD', True)
+	os.system('/home/hector/bin/ledonoff none')
 	return
 
 def GuardaSeries(Ruta, deb = False):
@@ -650,6 +653,8 @@ def GuardaSeries(Ruta, deb = False):
 	while not os.path.exists(env.SERIESG + Ruta + '/Series/'):
 			os.system('sudo mount ' + env.SERIESG + Ruta)
 			time.sleep(3)
+	# Encendemos el led verde para mostrar que estamos copiando
+	os.system('/home/hector/bin/ledonoff heartbeat')
 	# Nos vamos a la carpeta de las Series
 	os.chdir(env.PASADOS)
 	# Generamos la lista de las series que ya han pasado por el pen y aún no han sido copiadas u+rwx
@@ -707,7 +712,10 @@ def GuardaSeries(Ruta, deb = False):
 	GuardaLibre(env.SERIESG + Ruta + '/')
 	ListaSeries(Ruta)
 	CreaWeb('Series')
+	# Desmontamos la unidad
 	os.system('sudo umount ' + env.SERIESG + Ruta)
+	# Apagamos el led
+	os.system('/home/hector/bin/ledonoff none')
 	return
 
 def JTrailer(Peli, Debug = 0):
@@ -1215,19 +1223,21 @@ def Traspasa(Copio = 1, Monta = 1):
 		Log('No esta montado el pendrive', True)
 		if Copio:
 			exit(1)
-	#Cargamos las series que conocemos actualmente para no confundir las mayúsculas y minúsculas
+	# Activamos el led verde para informar de que hemos empezado la copia
+	os.system('/home/hector/bin/ledonoff cpu0')
+	# Cargamos las series que conocemos actualmente para no confundir las mayúsculas y minúsculas
 	os.chdir(env.MM + 'scaratulas')
 	Series = next(os.walk('.'))[2]
-	#Quitamos la extensión de la carátula
+	# Quitamos la extensión de la carátula
 	Series = [f[0:-4] for f in Series]
-	#Nos pasamos a la carpeta de las series
+	# Nos pasamos a la carpeta de las series
 	os.chdir(env.SERIES)
-	#Leemos los ficheros de la carpeta
+	# Leemos los ficheros de la carpeta
 	filenames = next(os.walk('.'))[2]
-	#Mostramos la lista de ficheros a procesar
+	# Mostramos la lista de ficheros a procesar
 	for x in filenames:
 		print(filenames.index(x) + 1, x)
-	#Cogemos cada fichero de la lista, lo copiamos al Pen y luego lo movemos a su respectiva carpeta en pasados
+	# Cogemos cada fichero de la lista, lo copiamos al Pen y luego lo movemos a su respectiva carpeta en pasados
 	for f in filenames:
 		Log('Procesamos y copiamos el fichero ' + f, True)
 		capi = Capitulo(f)
@@ -1266,27 +1276,27 @@ def Traspasa(Copio = 1, Monta = 1):
 			except shutil.Error as e:
 				Log('Ha ocurrido un error al mover el fichero %s' % e, True, '[Error]')
 				continue
-			#Activamos el atributo u+x que equivale al de archivo de Windows. Así podemos controlar cuales son nuevos
-			#para su posterior paso a los discos USB, tanto desde Windows como desde la misma Banana
-			#Cambiamos los permisos a rwxrw-rw-
+			# Activamos el atributo u+x que equivale al de archivo de Windows. Así podemos controlar cuales son nuevos
+			# para su posterior paso a los discos USB, tanto desde Windows como desde la misma Banana
+			# Cambiamos los permisos a rwxrw-rw-
 			os.chmod(env.PASADOS + capi.ConSerie, 0o766)
 			copiado = 1
 		else:
-			#Si no es una serie lo pasamos a la carpeta otros
+			# Si no es una serie lo pasamos a la carpeta otros
 			Log('Como parece que no es una serie, lo movemos a otros')
 			try:
 				shutil.move(capi.Todo, env.TEMP)
 			except OSError as e:
 				Log('Ha ocurrido un error al mover el fichero %s' % e, True)
 				continue
-			#Cambiamos los permisos a rwxrw-rw-
+			# Cambiamos los permisos a rwxrw-rw-
 			os.chmod(env.TEMP + capi.Todo, 0o766)
 			copiado = 1
-	#Por último, le decimos al amule que vuelva a cargar los compartidos para que se de cuenta 
-	#que lo que antes estaba en Series ahora está en pasados y si se han creados nuevas carpetas
+	# Por último, le decimos al amule que vuelva a cargar los compartidos para que se de cuenta 
+	# que lo que antes estaba en Series ahora está en pasados y si se han creados nuevas carpetas
 	if copiado:
 		os.system("/home/hector/bin/compartidos")
-	#Nos pasamos a la carpeta de las pelis
+	# Nos pasamos a la carpeta de las pelis
 	os.chdir(env.HD)
 	filenames = next(os.walk('.'))[2]
 	for f in filenames:
@@ -1296,7 +1306,7 @@ def Traspasa(Copio = 1, Monta = 1):
 			# Comprobamos si hay espacio suficiente
 			if not Queda(f, env.PENTEMP + 'Pelis'):
 				continue
-			#copiamos el fichero
+			# Copiamos el fichero
 			try:
 				shutil.copy(f,env.PENTEMP + 'Pelis')
 			except OSError as e:
@@ -1305,10 +1315,10 @@ def Traspasa(Copio = 1, Monta = 1):
 			except IOError as e:
 				Log('Ha ocurrido un error al copiar el fichero al pen ' + e.strerror, True)
 				continue
-			#Obtenemos los atributos actuales
+			# Obtenemos los atributos actuales
 			per = os.stat(f)
-			#Y le añadimos 'x' al usuario para marcarla como pasada al Pen. 
-			#Con el '|' hacemos un OR entre los permisos actuales y el que le queremos añadir
+			# Y le añadimos 'x' al usuario para marcarla como pasada al Pen. 
+			# Con el '|' hacemos un OR entre los permisos actuales y el que le queremos añadir
 			os.chmod(f, per.st_mode | stat.S_IXUSR)
 			copiado = 1
 	# Si hay películas nuevas, generamos la página de Últimas. CreaWeb se encarga de cambiar los permisos de los jpg
@@ -1330,6 +1340,8 @@ def Traspasa(Copio = 1, Monta = 1):
 					Log('Hubo un problema desmontando el Pen')
 					break
 	Log('Terminamos', True)
+	# Apagamos el led verde para informar de que hemos terminado la copia
+	os.system('/home/hector/bin/ledonoff none')
 	return
 
 if __name__ == "__main__":

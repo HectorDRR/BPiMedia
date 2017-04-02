@@ -29,15 +29,17 @@ echo El log del aMule
 read p
 tail -20 /mnt/e/.aMule/logfile
 echo El log del Transmission
-sudo grep transmission /var/log/daemon.log|tail -20
+read p
+sudo grep transmission /var/log/daemon.log|tail -30
 echo El log del minidlna y del traspasa
 read p
-tail /mnt/e/.mini/minidlna.log
-tail /mnt/e/.mini/milog.txt
+tail -15 /mnt/e/.mini/minidlna.log
+tail -20 /mnt/e/.mini/milog.txt
 echo Lo que hay en otros
 read p
 ls -lhst /mnt/e/otros
 echo El transmission
+read p
 transmission-remote localhost:8964 -l
 echo El Amule
 read p
