@@ -1,3 +1,6 @@
+function Series {
+	find /mnt/e/pasados/ -type f -perm -u+rwx -exec du -ch '{}' +|sort -k 2|more
+}
 uptime
 free
 pgrep -l amu
@@ -5,6 +8,10 @@ pgrep -l trans
 pgrep -l minidlna
 pgrep -l smb
 df -h /mnt/e /media
+if [ $1p == sp ];
+	then Series;
+	exit;
+fi
 cat /mnt/e/util/quedan.txt
 if [ -a /media/Series ]
     then
@@ -24,7 +31,7 @@ read p
 ls -lhst /mnt/e/Series
 echo Series pendientes de copiar
 read p
-find /mnt/e/pasados/ -type f -perm -u+rwx -exec du -ch '{}' +|sort -k 2|more
+Series
 echo El log del aMule
 read p
 tail -20 /mnt/e/.aMule/logfile

@@ -529,8 +529,8 @@ def GeneraLista(Listado, Pelis, Serie = False):
 			comen = ''
 			# Si se trata de series, cambiamos algunas cosas
 			if Serie:
-				que = f + '/' + f + '.'
-				capis = ':' + ListaCapitulos(f, Listado[-2:] + '/Series/')
+				que = f + env.DIR + f + '.'
+				capis = ':' + ListaCapitulos(f, Listado[-2:] + env.DIR + 'Series' + env.DIR)
 			else:
 				que = f[:-3]
 				capis = ''
@@ -852,6 +852,9 @@ def ListaCapitulos(Serie, Ruta):
 	los capítulos es homogénea, y no tenemos mezcla de mayúsculas o minúsculas así como otras alteraciones
 	"""
 	import glob
+	if env.SISTEMA == 'Windows':
+		env.SERIESG = ''
+		
 	os.chdir(env.SERIESG + Ruta + Serie)
 	# Leemos todos los capítulos
 	lista = glob.glob('*.avi')
@@ -945,20 +948,28 @@ def ListaSeries(Ruta=''):
 	El formato de la lista es serie:comentario:Capítulos
 	El formato del nombre es Series_Etiqueta
 	Normalmente es llamado desde GuardaSeries(Etiq) aunque se le puede llamar de manera independiente
+	Si lo llamamos desde DOS, tenemos que obtener la etiqueta y sustituir la ruta por ella en parte del código
 	El fichero con la lista se almacena en env.PLANTILLAS
 	"""
-	if os.path.exists(env.SERIESG + Ruta + '/Series'):
+	
+	if env.SISTEMA == 'Windows':
+		etiq = Etiqueta(Ruta)
+		env.SERIESG = ''
+	else:
+		etiq = 'Series_' + Ruta
+		
+	if os.path.exists(env.SERIESG + Ruta + env.DIR + 'Series'):
 		# Guardamos la carpeta donde estamos
 		pop = os.getcwd()
 		# Nos vamos a la carpeta raíz de las series
-		os.chdir(env.SERIESG + Ruta + '/Series')
+		os.chdir(env.SERIESG + Ruta + env.DIR + 'Series')
 		# Obtenemos lalista de las series
 		series = sorted(next(os.walk('.'))[1])
-		GeneraLista('Series_' + Ruta, series, True)
+		GeneraLista(etiq, series, True)
 		# Volvemos a la carpeta inicial
 		os.chdir(pop)
 	# Mostramos al final los capítulos que faltan
-	os.system('cat ' + env.PLANTILLAS + 'Series_' + Ruta + '|grep Faltan')
+	os.system('cat ' + env.PLANTILLAS + etiq + '|grep Faltan')
 	return
 	
 def Log(p1, imp = False, fallo = ''):
