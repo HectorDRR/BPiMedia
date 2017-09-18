@@ -530,6 +530,9 @@ def GeneraLista(Listado, Pelis, Serie = False):
 			# Si se trata de series, cambiamos algunas cosas
 			if Serie:
 				que = f + env.DIR + f + '.'
+				if env.SISTEMA == 'Windows':
+					# Tenemos que cambiar el parámetro Listado[-2:] puesto que en windows no funciona
+					pass
 				capis = ':' + ListaCapitulos(f, Listado[-2:] + env.DIR + 'Series' + env.DIR)
 			else:
 				que = f[:-3]
@@ -1189,8 +1192,8 @@ def Trailer(p1):
 					Log('Ha habido un problema procesando el trailer: ' + p1)
 					os.remove(env.TMP + 'NFO')
 					return ''
-			except BadZipFile as e:
-				Log('Ha habido un problema descomprimiendo el supuesto zip: ' + p1 + e.strerror, True)
+			except zipfile.BadZipFile as e:
+				Log('Ha habido un problema descomprimiendo el supuesto zip: ' + p1, True)
 				return ''
 		else:
 			Log('No encontramos el fichero NFO para ' + p1)

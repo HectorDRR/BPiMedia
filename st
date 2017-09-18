@@ -3,10 +3,12 @@ function Series {
 }
 uptime
 free
+echo Temperatura: `cat /sys/class/thermal/thermal_zone0/temp`
 pgrep -l amu
 pgrep -l trans
 pgrep -l minidlna
 pgrep -l smb
+pgrep -l vsftpd
 df -h /mnt/e /media
 if [ $1p == sp ];
 	then Series;
@@ -57,3 +59,4 @@ echo el Syslog
 read p
 sudo tail -40 /var/log/syslog|grep -v 'shrunk window'|grep -v CRON
 [ -f /tmp/mulacaida.txt ] && cat /tmp/mulacaida.txt
+[ -f /tmp/ftpcaido.txt ] && cat /tmp/ftpcaido.txt
