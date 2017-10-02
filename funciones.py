@@ -433,7 +433,9 @@ def CreaWeb(p1 = 'Ultimas', Pocas = 0):
 			termina = '</a>'
 		else:
 			mfaltan.append(peli)
-		trai = Trailer(peli)
+		# Suprimimos la búsqueda del trailer en las Series ya que no lo solemos poner
+		if not ser=='s':
+			trai = Trailer(peli)
 		# Añadimos un \n para que sea más fácil localizarlo desde el curro para anunciar las pelis
 		if len(trai) > 0:
 			trai = '\n <a href="' + trai + '" target="_trailer">[T]</a>\n'
@@ -906,7 +908,7 @@ def ListaCapitulos(Serie, Ruta):
 				if not int(f[-2:]) == x:
 					saltados = saltados + tem + 'x{0:02d}, '.format(x)
 				else:
-					break
+						break
 		capi = int(f[-2:])
 	resumen = resumen + '{0:02d} '.format(capi)
 	if len(saltados) > 0:
