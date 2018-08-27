@@ -1,0 +1,3 @@
+sudo umount /boot/efi/
+sudo fsck -y /dev/mmcblk1p6
+sudo mount /boot/efi/

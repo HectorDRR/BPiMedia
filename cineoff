@@ -1,0 +1,1 @@
+sudo ionice -p `pgrep mini` -c0

@@ -1,0 +1,4 @@
+service minidlna stop
+rm /mnt/e/.mini/files.db
+service minidlna start
+tail /var/log/minidlna.log

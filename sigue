@@ -1,0 +1,5 @@
+mount -a
+service amule-daemon start
+service transmission-daemon start
+service minidlna start
+service samba start

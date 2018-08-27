@@ -1,0 +1,7 @@
+sudo service minidlna stop
+sleep 2
+sudo cp /usr/local/sbin/minidlnad.old /usr/local/sbin/minidlnad
+sudo service minidlna start
+sleep 2
+tail /var/log/minidlna.log
+

@@ -1,0 +1,8 @@
+if [ -a /media/Series ]
+    then
+        echo Limpiamos lo que hay en el pen
+        read p
+        rm /media/Series/* /media/Pelis/*
+	df -h /media
+fi
+

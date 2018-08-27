@@ -1,0 +1,3 @@
+sudo service minidlna restart
+sleep 1
+tail /var/log/minidlna.log
