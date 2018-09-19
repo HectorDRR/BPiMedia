@@ -1,34 +1,35 @@
-#! /usr/bin/env python3
-# -*- coding: utf-8 -*-
 """Definiciones de rutas y variables para hacer el programa portable entre distintas plataformas/configuraciones
 """
 #Pelis en HD
-HD = 'Z:\\e\\HD\\'
+HD = 'p:\\pelis\\'
 #Donde guardar las pelis
 HDG = 'p:\\'
 #Series ya tratadas
-PASADOS = 'Z:\\e\\pasados\\'
+PASADOS = 'z:\\'
 #Pen Temporal
 PENTEMP = 'f:\\'
 #Series recien descargadas
-SERIES = 'z:\\e\\Series\\'
-#Donde Guardar las Series. Usado solo para listarlas y comprobar que no faltan capÃ­tulos
-SERIESG = PASADOS
+SERIES = 'z:\\'
+#Donde Guardar las Series. Usado solo para listarlas y comprobar que no faltan capítulos
+SERIESG = '\\\\metal\\Series\\'
 #Temporal donde van las series no tratadas u otros ficheros
-TEMP  = 'z:\\e\\otros\\'
+TEMP  = '\\\\metal\\Series\\otros\\'
 #Carpeta temporal
 TMP = 'j:\\temp\\'
 #Fichero con las series a ver
-SERIESVER = 'z:\\e\\ver.txt'
+SERIESVER = '\\\\metal\\Series\\ver.txt'
 #Log del sistema
 LOG = 'e:\\winutil\\syslog.txt'
 #Sheets
-MM = 'z:\\f\\'
+MM = 'e:\\Trabajo\\'
 #Plantillas
-PLANTILLAS = 'z:\\e\\util\\'
+PLANTILLAS = 'e:\\winutil\\'
 #Web
-WEB = MM
-#SISTEMA
+WEB = HD
+#Sistema del equipo
+#import platform
+#SISTEMA = platform.system()
+#del platform
 SISTEMA = 'Windows'
 #Comando para borrar
 DEL = 'del '

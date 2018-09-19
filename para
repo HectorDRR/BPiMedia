@@ -1,6 +1,6 @@
 service amule-daemon stop
-service transmission-daemon stop
+pkill -9 transmission-daemon
 service minidlna stop
-service samba stop
+service smbd stop
 #umount /mnt/e
 

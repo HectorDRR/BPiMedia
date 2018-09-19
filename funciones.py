@@ -25,6 +25,14 @@ Estado = ''
 
 class Capitulo:
 	""" Tratamiento de capítulos de series
+	Dividimos el nombre en:
+		Titulo: Solo el título del capítulo
+		Serie: El nombre de la Serie
+		Capi: el número del capítulo
+		Temp: El número de la temporada
+		Tipo: La extensión
+		Todo: El nombre completo del fichero
+		ConSerie: El nombre completo con el nombre de la Serie como prefijo para ponerlo en una carpeta Serie[\\,/]Todo
 	"""
 	def __init__(self, Todo):
 		""" Inicializamos las variables y dividimos el nombre del capítulo en sus componentes
@@ -61,36 +69,79 @@ class Capitulo:
 		#print(self.__dict__)
 		return
 
-	def Existe(self):
-		""" Para comprobar si la serie ya existe y procurar ponerle el mismo nombre que ya tiene
+	def Existe(self, FTP = False, Debug = False):
+		""" Para comprobar si la serie ya existe y procurar ponerle el mismo nombre que ya tiene o si no existe,
+		crear su carpeta
 		"""
 		# Cargamos las series que conocemos actualmente para no confundir las mayúsculas y minúsculas
 		# Lo hacemos usando una variable global para optimizar
 		global Series
 		Existe = False
+		# Asignamos el destino a PASADOS
+		destino = '/mnt/e/pasados/'
 		# En caso de que aún no las hayamos cargado, cargamos las series, tanto de las que ya tienen carátulas como de las que
 		# están en pasados pero que aún no hemos copiado o creado carátula
 		if len(Series) == 0:
-			Series = next(os.walk(env.MM + 'scaratulas'))[2]
+			if FTP:
+				# Guardamos la carpeta actual
+				anterior = FTP.pwd()
+				FTP.cwd('/mnt/f/scaratulas/')
+				Series = FTP.nlst()
+				FTP.cwd(destino)
+				SinCaratula = FTP.nlst()
+				# Volvemos a la carpeta inicial
+				FTP.cwd(anterior)
+			else:
+				Series = next(os.walk(env.MM + 'scaratulas'))[2]
+				SinCaratula = next(os.walk(env.PASADOS))[2]
 			# Quitamos la extensión de la carátula
 			Series = [f[0:-4] for f in Series]
 			# Para las nuevas que aún no tengamos carátulas y no se nos empiecen a copiar con distintos nombres
-			Series += next(os.walk(env.PASADOS))[2]
+			Series += SinCaratula
 		# Comprobamos que no ha habido un error con las minúsculas y mayúsculas
-		for s in Series:
-			# Si el nombre en mayúsculas es igual, pero no lo es el original
-			if s.upper() == self.Serie.upper() and not s == self.Serie:	
-				# Renombramos el fichero original con el nombre que ha de tener
-				os.rename(self.Todo, self.Todo.replace(self.Serie,s))
-				# Cambiamos también las variables
-				self.Todo = self.Todo.replace(self.Serie,s)
-				self.ConSerie = self.ConSerie.replace(self.Serie,s)
-				self.Serie = s
-				# Consideramos que la serie existe
-				Existe = True
-				break
+		if self.Serie in Series:
+			Existe = True
+			# Comprobamos que existe la carpeta en Pasados, ya que es posible que la Serie exista pero la carpeta no
+			if FTP:
+				actual = FTP.pwd()
+				try:
+					FTP.cwd(destino + self.Serie)
+				except:
+					Log('Creamos la carpeta ' + self.Serie + ' en remoto', Debug)
+					FTP.mkd(destino + self.Serie)
+				# Volvemos a nuestra carpeta
+				FTP.cwd(actual)
+		else:
+			for s in Series:
+				# Si el nombre en mayúsculas es igual, pero no lo es el original
+				if s.upper() == self.Serie.upper() and not s == self.Serie:	
+					# Renombramos el fichero original con el nombre que ha de tener
+					# print('Nombre actual: ' + self.Serie, 'Nombre correcto: ' + s, 'Nombre a cambiar: ' + self.Todo.replace(self.Serie,s))
+					if FTP:
+						FTP.rename(self.Todo, self.Todo.replace(self.Serie,s))
+					else:
+						os.rename(self.Todo, self.Todo.replace(self.Serie,s))
+					# Cambiamos también las variables
+					self.Todo = self.Todo.replace(self.Serie,s)
+					self.ConSerie = self.ConSerie.replace(self.Serie,s)
+					self.Serie = s
+					# Consideramos que la serie existe
+					Existe = True
+					break
 		# Si llegamos hasta aquí es que no existe la carpeta ni hay un error en mayúsculas/minúsculas
-		return Existe
+		if not Existe:
+			# Creamos la carpeta
+			if FTP:
+				try:
+					FTP.mkd(destino + self.Serie)
+				except:
+					Log('Ha habido un error creando por FTP la carpeta ' + destino + self.Serie, True)
+			else:
+				os.mkdir(env.PASADOS + self.Serie)
+			# La añadimos a la lista para no intentar volver a crearla
+			Series.append(self.Serie)
+		# Siempre devolvemos True porque de no existir, la creamos justo antes de retornar. Habrá que ver si en el futuro habrá que cambiarlo
+		return True
 		
 	def Limpia(self):
 		""" Limpiamos el nombre del capítulo para quitar lo incluido entre corchetes
@@ -138,14 +189,14 @@ class SonoffTH:
 		self.client.connect('192.168.1.8')
 		# Asigno la función que va a procesar los mensajes recibidos
 		self.client.on_message = self.SonOff_leo
+		# Lo despertamos de su letargo para que nos responda más rápido, ya que hemos observado que con el sleep activado tarda más tiempo
+		self.client.publish('cmnd/' + self.Topico + '/SLEEP', '0')
+		# Al cambiar el sleep, se reinicia, por lo que hay que darle un par de segundos para que vuelva a estar activos
+		time.sleep(15)
 		# Me subscribo a los tópicos necesarios, Estado y Temperatura
 		self.client.subscribe([('stat/' + self.Topico + '/RESULT', 0), ('stat/' + self.Topico + '/STATUS10', 0)])
 		# Comenzamos el bucle
 		self.client.loop_start()
-		# Lo despertamos de su letargo para que nos responda más rápido, ya que hemos observado que con el sleep activado tarda más tiempo
-		self.client.publish('cmnd/' + self.Topico + '/SLEEP', '0')
-		# Al cambiar el sleep, se reinicia, por lo que hay que darle un par de segundos para que vuelva a estar activos
-		time.sleep(12)
 		# Pedimos Temperatura
 		self.LeeTemperatura()
 		# Pedimos Estado
@@ -248,11 +299,14 @@ class SonoffTH:
 
 	def LeeEstado(self):
 		""" Esta función obtiene el estado del SonOff para saber si está encendido o apagado
+		Debido a que a veces no responde a tiempo esperamos hasta que se produzca la respuesta.
 		"""
-		# Pedimos el estado
-		self.client.publish('cmnd/' + self.Topico + '/POWER')
-		# Damos algo de tiempo para procesar la respuesta
-		time.sleep(1)
+		self.Estado = ''
+		while self.Estado == '':
+			# Pedimos el estado
+			self.client.publish('cmnd/' + self.Topico + '/POWER')
+			# Damos algo de tiempo para procesar la respuesta
+			time.sleep(1)
 		return self.Estado
 	
 	def SonOff_leo(self, client, userdata, message):
@@ -275,11 +329,14 @@ class SonoffTH:
 	def LeeTemperatura(self):
 		""" Esta función obtiene la temperatura actual del sensor del SonOff. Requiere que el bucle sea 
 		iniciado y cerrado desde la función llamante.
+		Debido a que a veces no responde a tiempo esperamos hasta que se produzca la respuesta.
 		"""
-		# Pedimos la temperatura
-		self.client.publish('cmnd/' + self.Topico + '/STATUS', '10')
-		# Damos algo de tiempo para procesar la respuesta
-		time.sleep(1)
+		self.Temperatura = 0
+		while self.Temperatura == 0:
+			# Pedimos la temperatura
+			self.client.publish('cmnd/' + self.Topico + '/STATUS', '10')
+			# Damos algo de tiempo para procesar la respuesta
+			time.sleep(1)
 		return self.Temperatura
 	
 	def Fin(self):
@@ -293,8 +350,8 @@ class SonoffTH:
 		self.client.loop_stop()
 		del(self.client)
 	
-def BajaSeries():
-	""" *En OBRAS* Se conecta por FTP a la mula para comprobar si hay nuevos capítulos de las series que tenemos
+def BajaSeries(Debug = False):
+	""" Se conecta por FTP a la mula para comprobar si hay nuevos capítulos de las series que tenemos
 	en el curro y bajarse los que falten.
 	Tenemos pendiente implementar control de capítulos sobreescritos por problemas
 	Tenemos que tener en cuenta aquellas series que están enteras en el curro pero no en el servidor
@@ -302,11 +359,15 @@ def BajaSeries():
 	"""
 	from ftplib import FTP
 	import claves
+	# Para convertir a boleano el valor del parámetro
+	Debug = (Debug == 'True')
 	# Nos vamos a las Pelis
 	os.chdir(env.HD)
 	# Ahora realizamos la conexión al servidor FTP
 	ftp = FTP()
 	ftp.connect('hrr.no-ip.info', 2211)
+	# Cambiamos encoding a utf8 para que se respeten los acentos
+	ftp.encoding='utf-8'
 	ftp.login(claves.FTPMulitaUser, claves.FTPMulitaPasswd)
 	ftp.cwd('HD')
 	# Obtenemos la lista de películas pendientes de procesar
@@ -326,20 +387,59 @@ def BajaSeries():
 			if input('No queda espacio suficiente en ' + env.HD[0:2] + ', limpia') == 'n':
 					continue
 		with open(f, 'wb') as file:
-			Log('Descargamos ' + f, True)
-			if ftp.retrbinary('RETR ' + f, file.write, 1024) == '226 Transfer complete.':
+			Log('Descargamos ' + f, Debug)
+			if ftp.retrbinary('RETR ' + f, file.write, 10240) == '226 Transfer complete.':
 				# Cambiamos atributos para marcarla como bajada. Pendiente leerlos primero para solo cambiar el primero
 				ftp.sendcmd('SITE CHMOD 766 ' + f)
 	# Pasamos a las Series
 	os.chdir(env.PASADOS)
 	ftp.cwd('/mnt/e/Series/')
+	# Generamos la lista de series que hay
+	os.system('dir /b /ad >ver.txt')
 	lista = ftp.nlst()
+	print(lista)
 	for f in lista:
 		capi = Capitulo(f)
-		# Si es de alguna serie quen os interesa
-		if capi.Vemos():
-			# Lo descargamos en su carpeta si hay espacio
-			if not Queda(f, env.PSASADOS, ftp):
+		# Si no es una serie o no está en la lista, la movemos a otros y pasamos al siguiente
+		if not capi.Ok:
+			destino = '/mnt/e/otros/'
+			Log('Pasamos ' + f + ' a Otros', Debug)
+			ftp.rename(f, destino + f)
+			continue
+		# Comprobamos si el nombre es correcto y creamos la carpeta en caso necesario
+		capi.Existe(ftp)
+		# Asignamos el destino a PASADOS
+		destino = '/mnt/e/pasados/'
+		# A partir de aquí hemos de usar capi.Todo por si el nombre ha cambiado
+		# Si no es de las que seguimos en el curro
+		if not capi.Vemos():
+			# Cambiamos atributos para marcarla como bajada. Pendiente leerlos primero para solo cambiar el primero
+			ftp.sendcmd('SITE CHMOD 766 ' + capi.Todo)
+			# Lo movemos a su carpeta
+			Log('Movemos ' + capi.Todo + ' a su carpeta', Debug)
+			try:
+				ftp.rename(capi.Todo, destino + capi.Serie + '/' + capi.Todo)
+			except:
+				Log('Ha habido algún problema moviendo ' + capi.Todo + ' a ' + destino + capi.Serie + '/' + capi.Todo, Debug)
+			continue
+		# Si es de alguna serie que nos interesa
+		# Lo descargamos en su carpeta si hay espacio
+		if not Queda(capi.Todo, env.PASADOS, ftp):
+			if input('No queda espacio suficiente en ' + env.PASADOS[0:2] + ', limpia') == 'n':
+				continue
+		os.chdir(capi.Serie)
+		with open(capi.Todo, 'wb') as file:
+			Log('Descargamos ' + capi.Todo, True)
+			if ftp.retrbinary('RETR ' + capi.Todo, file.write, 10240) == '226 Transfer complete.':
+				# Cambiamos atributos para marcarla como bajada. Pendiente leerlos primero para solo cambiar el primero
+				ftp.sendcmd('SITE CHMOD 766 ' + capi.Todo)
+				# Lo movemos a su carpeta
+				Log('Lo movemos a ' + destino + capi.Serie + '/', Debug)
+				ftp.rename(capi.Todo, destino + capi.Serie + '/' + capi.Todo)
+		# Volvemos a la carpeta de pasados
+		os.chdir('..')
+	# Cerramos la conexión
+	ftp.close()
 	return
 
 def Borra(Liberar = 30, Dias = 20, Auto = 0):
@@ -1428,11 +1528,23 @@ def Placa(Quehacemos = 3):
 def Prueba(Param):
 	""" Para probar funciones que estamos desarrollando
 	"""
-	bomba = SonoffTH('bomba')
-	bomba.Debug = True
-	bomba.Controla(4, 35, 32)
-	bomba.Fin()
-	del(bomba)
+	# Para copiar ficheros con nombres extraños por culpa de acentos y codigo de página erróneos basándonos en la salida en csv del Teracopy
+	import glob
+	file = open('c:\\users\\hector\\AppData\\Roaming\\TeraCopy\\Reports\\2018.09.11_10-48-56.csv', encoding='iso-8859-1')
+	lista = []
+	for line in file:
+		pp = line.split(',')[2]
+		pp = pp[pp.find('\\') + 1:]
+		lista.append(pp)
+	file.close()
+	lista.remove('Filename')
+	for f in lista:
+		print('Procesando ' + f)
+		capi = Capitulo(f)
+		nuevo = glob.glob('p:\\Series\\' + capi.Serie + '\\' + capi.Serie + ' ' + capi.Temp + 'x' + capi.Capi + '*')
+		#nuevo = input('El nombre actual es: ' + capi.Titulo + ' :')
+		print('Copiando ' + nuevo[0] + ' en ' + 'f:\\Series\\' + capi.Serie + '\\')
+		shutil.copy(nuevo[0], 'f:\\Series\\' + capi.Serie + '\\')
 	#print(type(Param)==str, int(Param))
 	#print(pp.Temp, pp.Estado)
 	return

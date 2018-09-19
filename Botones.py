@@ -43,8 +43,15 @@ def Boton_Apretado(MAC):
 	# Objetivo a alcanzar. En principio, 5 grados más que la actual
 	temperatura = bomba.Temperatura + 5
 	# Aplicamos el nuevo control automático embebido en la clase
-	bomba.Controla (4, TMax = 35, TMin = 30)
-	# Lo dejamos inutilizado hasta confirmar que elcontrol embebido está funcionando correctamente
+	#bomba.Controla (4, TMax = 35, TMin = 30)
+	# Lo dejamos inutilizado hasta confirmar que el control embebido está funcionando correctamente
+	# Volvemos a activarlo para hacer pruebas de calibración. Creo que con 70 segundos es más que suficiente
+	while (not bomba.Estado == 'ON' and bomba.Temperatura < temperatura):
+		# Activamos la bomba durante 80 segundos y esperamos 90 más para esperar a que llegue el calor al sensor
+		bomba.Controla(1, temperatura, 0, 80)
+		time.sleep(80 + 90)
+		bomba.LeeTemperatura()
+		Log('Despues de 80 + 90 segundos la temperatura es de ' + str(bomba.Temperatura) + 'º y al comenzar era de ' + str(temperatura -5) + 'º', True)
 	if False:
 		# Comprobamos si está desactivada la bomba y que la temperatura es menor del objetivo
 		while (not bomba.Estado == 'ON' and bomba.LeeTemperatura() < temperatura):

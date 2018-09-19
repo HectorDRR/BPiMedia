@@ -4,12 +4,7 @@ function Series {
 uptime
 free -h
 echo Temperatura: `cat /sys/class/thermal/thermal_zone0/temp`
-pgrep -l amu
-pgrep -l trans
-pgrep -l minidlna
-pgrep -l smb
-pgrep -l vsftpd
-pgrep -a python3
+procesos.sh
 df -h /mnt/e /media
 if [ $1p == sp ];
 	then Series;
