@@ -180,25 +180,37 @@ class SonoffTH:
 	def __init__(self, Topico, Debug = False):
 		""" Inicializamos el objeto con el tópico que hemos asignado al SonOff
 		"""
-		# Por si queremos imprimir los mensajes
-		self.Debug = Debug
-		self.Topico = Topico
-		# Creo el cliente
-		self.client = self.mqtt.Client(Topico)
-		# Conecto al broker
-		self.client.connect('192.168.1.8')
-		# Asigno la función que va a procesar los mensajes recibidos
-		self.client.on_message = self.SonOff_leo
-		# Lo despertamos de su letargo para que nos responda más rápido, ya que hemos observado que con el sleep activado tarda más tiempo
-		self.client.publish('cmnd/' + self.Topico + '/SLEEP', '0')
-		# Al cambiar el sleep, se reinicia, por lo que hay que darle un par de segundos para que vuelva a estar activos
-		time.sleep(15)
-		# Me subscribo a los tópicos necesarios, Estado y Temperatura
-		self.client.subscribe([('stat/' + self.Topico + '/RESULT', 0), ('stat/' + self.Topico + '/STATUS10', 0)])
-		# Comenzamos el bucle
-		self.client.loop_start()
-		# Pedimos Temperatura
-		self.LeeTemperatura()
+		bucle = 0
+		# Debido a problemas inicilizando el objeto, procedemos a meterlo en un bucle para intentar inicializarlo al menos 3 veces
+		while True:
+			# Por si queremos imprimir los mensajes
+			self.Debug = Debug
+			self.Topico = Topico
+			# Creo el cliente
+			self.client = self.mqtt.Client(Topico)
+			# Conecto al broker
+			self.client.connect('192.168.1.8')
+			# Asigno la función que va a procesar los mensajes recibidos
+			self.client.on_message = self.SonOff_leo
+			# Lo despertamos de su letargo para que nos responda más rápido, ya que hemos observado que con el sleep activado tarda más tiempo
+			#self.client.publish('cmnd/' + self.Topico + '/SLEEP', '0')
+			# Al cambiar el sleep, se reinicia, por lo que hay que darle un par de segundos para que vuelva a estar activos
+			#time.sleep(15)
+			# Me subscribo a los tópicos necesarios, Estado y Temperatura
+			self.client.subscribe([('stat/' + self.Topico + '/RESULT', 0), ('stat/' + self.Topico + '/STATUS10', 0)])
+			# Comenzamos el bucle
+			self.client.loop_start()
+			# Pedimos Temperatura
+			if self.LeeTemperatura() == 0:
+				self.Debug = True
+				self.Fin()
+				bucle += 1
+				if bucle > 3:
+					Log('No hemos podido inicializar el objeto ' + Topico, True)
+					return(False)
+				continue
+			else:
+				break
 		# Pedimos Estado
 		self.LeeEstado()
 	
@@ -210,6 +222,7 @@ class SonoffTH:
 		Partimos de una consigna de 40º mínimo y 45 máximo que hemnos visto es suficiente para bañarnos los 3
 		TMax: Temperatura máxima a alcanzar cuando el control es automático
 		TMin: Temperatura mínima para proceder con el control automático
+		Tiempo: En segundos que queremos mantener la placa funcionando
 		
 		**Por seguridad, por si hubiera algún problema con la mulita o pérdida de conexió Wifi, procedemos a usar el comando
 		'backlog' que nos permite agrupar varios comandos en una sola orden, de manera que siempre que activemos el SonOff
@@ -233,6 +246,7 @@ class SonoffTH:
 			if self.Debug:
 				print('cmnd/' + self.Topico + '/POWER', 'OFF', 'Estado: ' + self.LeeEstado())
 			Log('Desactivamos la ' + self.Topico + ' manualmente', self.Debug)
+			return
 		if (Modo == 1 and self.Estado == 'OF'):
 			if Tiempo == 0:
 				# Activamos el SonOff
@@ -246,6 +260,7 @@ class SonoffTH:
 				if self.Debug:
 					print('cmnd/' + self.Topico + '/BACKLOG', 'POWER ON;DELAY ' + str(Tiempo * 10) + ';POWER OFF\nEstado: ' + self.LeeEstado())
 				Log('Activamos la ' + self.Topico + ' manualmente durante ' + str(Tiempo) + ' segundos', self.Debug)
+			return
 		if Modo == 2:
 			# Si la temperatura está por debajo de la requerida
 			if self.LeeTemperatura() < TMin:
@@ -260,6 +275,7 @@ class SonoffTH:
 				if self.Estado == 'ON':
 					self.client.publish('cmnd/' + self.Topico + '/POWER', 'OFF')
 					Log('Desactivamos la ' + self.Topico + '', self.Debug)
+			return
 		if Modo == 4:
 			# Para ir desarrollando el control totalmente automatizado embebido en el objeto
 			# Si la temperatura está por debajo de la requerida
@@ -285,6 +301,8 @@ class SonoffTH:
 							time.sleep(360)
 							# Para ir monitorizando, vamos pasando al log la temperatura
 							Log('Temperatura de la ' + self.Topico + ': ' + str(self.LeeTemperatura()) + 'º', self.Debug)
+							if self.Temperatura >= TMax:
+								break
 						# Y por último, la mantenemos encendida el tiempo restante no múltiplo de 6 minutos
 						# Al delay el tiempo se le pasa en décimas de segundo, así que en vez de * 10 sencillamente le añadimos un 0
 						self.client.publish('cmnd/' + self.Topico + '/BACKLOG', 'POWER ON;DELAY ' + str(Tiempo % 360) + '0;POWER OFF')
@@ -301,12 +319,19 @@ class SonoffTH:
 		""" Esta función obtiene el estado del SonOff para saber si está encendido o apagado
 		Debido a que a veces no responde a tiempo esperamos hasta que se produzca la respuesta.
 		"""
+		bucle = 0
 		self.Estado = ''
 		while self.Estado == '':
 			# Pedimos el estado
 			self.client.publish('cmnd/' + self.Topico + '/POWER')
 			# Damos algo de tiempo para procesar la respuesta
 			time.sleep(1)
+			bucle += 1
+			if bucle > 7:
+				self.Debug = True
+			if bucle >= 10:
+				Log('Ha habido un problema intentando obtener el estado', True)
+				break
 		return self.Estado
 	
 	def SonOff_leo(self, client, userdata, message):
@@ -314,10 +339,12 @@ class SonoffTH:
 		"""
 		import json
 
-		if self.Debug:
-			print(message.payload)
 		# Lo importamos en formato json
 		self.mensaje = json.loads(message.payload.decode("utf-8"))
+		if self.Debug:
+			print('Debug, self.mensaje: ')
+			for f in self.mensaje:
+				print(f)
 		if 'StatusSNS' in self.mensaje:
 			# Extraemos la temperatura
 			self.Temperatura = int(self.mensaje["StatusSNS"]["DS18B20"]["Temperature"])
@@ -331,12 +358,19 @@ class SonoffTH:
 		iniciado y cerrado desde la función llamante.
 		Debido a que a veces no responde a tiempo esperamos hasta que se produzca la respuesta.
 		"""
+		bucle = 0
 		self.Temperatura = 0
 		while self.Temperatura == 0:
 			# Pedimos la temperatura
 			self.client.publish('cmnd/' + self.Topico + '/STATUS', '10')
 			# Damos algo de tiempo para procesar la respuesta
 			time.sleep(1)
+			bucle += 1
+			if bucle > 7:
+				self.Debug = True
+			if bucle >= 10:
+				Log('Ha habido un problema intentando obtener la temperatura', True)
+				break
 		return self.Temperatura
 	
 	def Fin(self):
@@ -345,7 +379,7 @@ class SonoffTH:
 		if self.Debug:
 			print('Eliminamos el objeto')
 		# Lo sumimos de nuebo en su letargo para que consuma menos energía
-		self.client.publish('cmnd/' + self.Topico + '/SLEEP', '50')
+		# self.client.publish('cmnd/' + self.Topico + '/SLEEP', '50')
 		# Cerramos el blucle
 		self.client.loop_stop()
 		del(self.client)
@@ -374,6 +408,7 @@ def BajaSeries(Debug = False):
 	listaremota = []
 	ftp.retrlines('list *.mkv', callback=listaremota.append)
 	lista = []
+	# Pendiente bajar también las infantiles que no se hayan bajado. Revisar que permisos tienen y como cambiarlos
 	for f in listaremota:
 		if f[0:10] == '-rw-rw-rw-':
 			# Partimos de buscar el primer espacio a partir del campo hora
@@ -440,6 +475,79 @@ def BajaSeries(Debug = False):
 		os.chdir('..')
 	# Cerramos la conexión
 	ftp.close()
+	return
+
+def Bomba(Debug = False):
+	""" Desde aquí controlamos el funcionamiento de la bomba.
+	"""
+	# Creamos las instancias
+	bomba = SonoffTH('bomba')
+	if bomba == False:
+		return(False)
+	# Si la temperatura actual es mayor de 30º es que ya ha estado en funcionamiento, así que salimos
+	if bomba.Temperatura > 30:
+		Log('La temperatura de la bomba es de ' + str(bomba.Temperatura) + 'º, así que no la activamos', Debug)
+		del(bomba)
+		return
+	placa = SonoffTH('placa')
+	if placa == False:
+		return(False)
+	# Si el agua no está caliente, activamos la placa. Hay que pasar este valor a la clase
+	TMin = 40
+	if placa.Temperatura < TMin:
+		placa.Controla(4)
+	# Finalizamos el objeto
+	placa.Fin()
+	# Activamos la depuración dentro del objeto
+	#bomba.Debug = True
+	# Objetivo a alcanzar. En principio, 3 grados más que la actual
+	temperatura = bomba.Temperatura + 3
+	# Aplicamos el nuevo control automático embebido en la clase
+	#bomba.Controla (4, TMax = 35, TMin = 30)
+	# Lo dejamos inutilizado hasta confirmar que el control embebido está funcionando correctamente
+	# Volvemos a activarlo para hacer pruebas de calibración.
+	while (bomba.Estado == 'OF' and bomba.Temperatura < temperatura):
+		# Vamos comprobando la temperatura cada 10 segundos para un total de x segundos y después esperamos
+		for f in range(0, 6):
+			# Activamos la bomba durante x segundos y esperamos 60 más para que llegue el calor al sensor
+			bomba.Controla(1, temperatura, 0, 10)
+			time.sleep(10)
+			if bomba.LeeTemperatura() >= temperatura:
+				break
+		# Después de haber activado la bomba durante x segundos en tramos de 10, esperamos a ver si la temperatura sube
+		for g in range(0, 6):
+			time.sleep(10)
+			if bomba.LeeTemperatura() >= temperatura:
+				break			
+	# Cuando nos da error la consulta de temperatura o estado no llega a pasar por el bucle y da error al hacer el log. Con este parche lo solucionamos temporalmente
+	if not 'f' in locals():
+		f = 0
+		g = 0
+	Log('Despues de ' + str(f*10 + g*10) + ' segundos la temperatura es de ' + str(bomba.Temperatura) + 'º y al comenzar era de ' + str(temperatura -5) + 'º', True)
+	time.sleep(150)
+	Log('Después de 150 segundos más la temperatura es de ' + str(bomba.LeeTemperatura()) + 'º')
+	if False:
+		# Comprobamos si está desactivada la bomba y que la temperatura es menor del objetivo
+		while (not bomba.Estado == 'ON' and bomba.LeeTemperatura() < temperatura):
+			# Calculamos el tiempo de funcionamiento en base al diferencial de temperatura. Como lo establecemos en 5º vamos a poner 12 segundos por º
+			tiempo = (temperatura - bomba.Temperatura) * 12
+			# La activamos durante el tiempo necesario. No es necesaria la temperatura mínima, que es el segundo parámetro, puesto que lo controlamos manualmente
+			Log('Activamos bomba con una temperatura de ' + str(bomba.Temperatura) + ' durante ' + str(tiempo) + ' segundos', Debug)
+			bomba.Controla(1, temperatura, 0, tiempo)
+			# Debido a la inercia térmica, esperamos un minuto adicional antes de volver a leer la temperatura para dar tiempo a que el calor llegue al sensor
+			time.sleep(tiempo + 60)
+			# La paramos. Ya no es necesario al implementar el parámetro de tiempo con el backlog en la llamada al SonOff
+			# Log('Paramos la bomba ' + str(tiempo) + ' segundos después y esperamos 60 segundos para volver a medir la temperatura', Debug)
+			# bomba.Controla(0)
+		else:
+			# Si está activa la paramos
+			Log('Paramos la bomba. Temp. Inicial: ' + str(temperatura - 5) + 'º y la temperatura final es de ' + str(bomba.Temperatura) + 'º', Debug)
+			if bomba.Estado == 'ON':
+				bomba.Controla(0)
+		time.sleep(300)
+		Log('Temperatura de la bomba 5 minutos después: ' + str(bomba.LeeTemperatura()) + 'º', Debug)
+	# Finalizamos los objetos
+	bomba.Fin()
 	return
 
 def Borra(Liberar = 30, Dias = 20, Auto = 0):
@@ -943,7 +1051,7 @@ def GuardaHD(Disco = ''):
 	LimpiaHD()
 	Etiq = GuardaLibre(env.HDG)
 	# Paramos el disco duro por si lo hemos dejado copiando. El parámetro -Sx establece en x*5 segundos el tiempo de inactividad antes de pararse
-	os.system('sync &&cd &&sudo umount /mnt/HD')
+	os.system('sync &&cd &&sudo umount /mnt/HD &&sudo hdparm -y /dev/disk/by-label/HD-TB-8-1')
 	return
 
 def GuardaLibre(Ruta):
@@ -1093,6 +1201,8 @@ def GuardaSeries(Ruta, deb = False):
 	CreaWeb('Series')
 	# Desmontamos la unidad
 	os.system('sync &&sudo umount ' + env.SERIESG + Ruta)
+	# Dormimos la unidad
+	os.system('sudo hdparm -y /dev/disk/by-label/Series_' + Ruta[0] +'-' + Ruta[1])
 	# Apagamos el led
 	# os.system('/home/hector/bin/ledonoff none')
 	return
@@ -1504,7 +1614,55 @@ def Para():
 	for f in (range(1,len(sys.argv))):
 		print(str(f) + ': ' + sys.argv[f])
 
-def Placa(Quehacemos = 3):
+def PasaaBD(Fichero = '/var/log/placa.log'):
+	""" Esta función pasa a una Base de Datos en sqlite3 la información de la placa solar y la bomba obtenida a través del MQTT
+	y volcada en /var/log/placa.log. Una vez renombramos el fichero, pasamos los datos, y los archivamos en un zip.
+	Nos falta también almacenar los de la Bomba, si es que nos interesa de alguna manera.
+	"""
+	import sqlite3
+	
+	con = sqlite3.connect('/mnt/e/.mini/placa.db')
+	cursor = con.cursor()
+	# Creamos las tablas sólo la primera vez
+	# cursor.execute('''Create TABLE Placa (Fecha	Char(19)	Primary Key Not Null, Temperatura	Real	Not Null, Encendido	Int	Not Null)''')
+	# cursor.execute('''Create TABLE Bomba (Fecha	Char(19)	Primary Key Not Null, Temperatura	Real	Not Null, Encendido	Int	Not Null)''')
+	# Renombramos el log para no recibir más datos durante el proceso y cambiamos los permisos
+	os.system('sudo mv ' + Fichero + ' /mnt/e/.mini/placa_' + time.strftime('%Y%m%d') + '.log && sudo chmod 777 /mnt/e/.mini/placa_' + time.strftime('%Y%m%d') + '.log')
+	# Cambiamos la variable para que apunte al fichero renombrado
+	Fichero = '/mnt/e/.mini/placa_' + time.strftime('%Y%m%d') + '.log'
+	# Cargamos los datos de la placa. Idealmente, deberíamos hacer la criba nosotros y no a través del grep
+	Datos = list(filter(None,os.popen('grep -v STATUS10 ' + Fichero + ' | grep -v /POWER | grep -v bomba|grep -v UPTIME|grep -v RESULT').read().split('\n')))
+	Encendido = -1
+	Temperatura = 0.0
+	contador = 0
+	Log('Comenzamos la importación de datos de la Placa a la BD en sqlite3 con el primer dato: ' + Datos[0][0:15])
+	for f in Datos:
+		try:
+			mensaje = eval(f[f.index('{'):])
+		except:
+			continue
+		if 'DS18B20' in mensaje:
+			Temperatura = float(mensaje['DS18B20']['Temperature'])
+		if 'POWER' in mensaje:
+			Fecha = mensaje['Time'].replace('T',' ')
+			if mensaje['POWER'] == 'ON':
+				Encendido = 1
+			else:
+				Encendido = 0
+		# Si ya tenemos ambos datos, pasamos al siguiente
+		if not Temperatura == 0 and not Encendido == -1:
+			print(Fecha, Temperatura, Encendido)
+			cursor.execute("INSERT INTO Placa (Fecha, Temperatura, Encendido) VALUES ('" + Fecha + "', " + str(Temperatura) + ", " + str(Encendido) + ")")
+			Temperatura = 0
+			Encendido = -1
+			contador += 1
+	con.commit()
+	con.close()
+	# Lo movemos al zip de los logs
+	os.system('zip -m /mnt/e/.mini/logs.zip ' + Fichero)
+	Log('Terminamos la importación de datos del log de la Placa a la BD con el ' + f[0:15] + '  y hemos importado ' + str(contador) + ' valores')
+
+def Placa(Quehacemos = 3, Tiempo = 0):
 	""" Función encargada de controlar el SonOff de la placa a través de MQTT.
 	Si Quehacemos: 0 Paramos la placa
 				   1 Activamos la placa
@@ -1518,7 +1676,7 @@ def Placa(Quehacemos = 3):
 	Quehacemos = int(Quehacemos)
 	# En caso de control sencillo, como ya está programado en la clase lo pasamos directamente
 	if Quehacemos < 3:
-		placa.Controla(Quehacemos)
+		placa.Controla(Quehacemos, Tiempo)
 	# Si solo queremos la temperatura o aunque no la queramos, la devolvemos
 	temp = placa.Temperatura
 	# Eliminamos el objeto
@@ -1725,7 +1883,7 @@ def Temperatura(Cada = 2, Cuantos = '850', Cual = 'Temperatura'):
 	planti[18] = ' ' * 28 + "xLabel: 'Cada " + str(int(Cada) * 5) + " minutos',"
 	# Cargamos los datos excluyendo los de la Bomba, por ahora
 	Datos = list(filter(None,os.popen('tail -' + Cuantos + ' /var/log/placa.log | grep -v STATUS10 | grep -v /POWER | grep -v bomba').read().split('\n')))
-	# Extraemos la información
+	# Extraemos la información: hora, temperatura, estado
 	Lecturas = [[0,0,-1]]
 	cont = 0
 	for f in Datos:

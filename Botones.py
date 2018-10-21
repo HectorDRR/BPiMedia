@@ -5,7 +5,7 @@
 
 # Importamos la librería kamene que es la version de scapy con compatibilidad con Python3
 from kamene.all import *
-from funciones import SonoffTH, Log
+from funciones import SonoffTH, Bomba, Log
 import time
 import sys
 
@@ -16,15 +16,21 @@ Debug = False
 
 def Boton_Apretado(MAC):
 	""" Desde aquí controlamos el funcionamiento de la bomba.
+	Lo hemos pasado a funciones y lo importamos al principio por lo que aquí ya no tiene utilidad
+	Lo dejamos temporalmente hasta confirmar que fucnionacorrectamente de esta nueva manera
 	"""
 	# Creamos las instancias
 	bomba = SonoffTH('bomba')
+	if bomba == False:
+		return(False)
 	# Si la temperatura actual es mayor de 30º es que ya ha estado en funcionamiento, así que salimos
 	if bomba.Temperatura > 30:
 		Log('La temperatura de la bomba es de ' + str(bomba.Temperatura) + 'º, así que no la activamos', Debug)
 		del(bomba)
 		return
 	placa = SonoffTH('placa')
+	if placa == False:
+		return(False)
 	# Si el agua no está caliente, activamos la placa. Hay que pasar este valor a la clase
 	TMin = 40
 	while placa.Temperatura < TMin:
@@ -40,22 +46,28 @@ def Boton_Apretado(MAC):
 		placa.LeeTemperatura
 	# Activamos la depuración dentro del objeto
 	#bomba.Debug = True
-	# Objetivo a alcanzar. En principio, 5 grados más que la actual
-	temperatura = bomba.Temperatura + 5
+	# Objetivo a alcanzar. En principio, 3 grados más que la actual
+	temperatura = bomba.Temperatura + 3
 	# Aplicamos el nuevo control automático embebido en la clase
 	#bomba.Controla (4, TMax = 35, TMin = 30)
 	# Lo dejamos inutilizado hasta confirmar que el control embebido está funcionando correctamente
-	# Volvemos a activarlo para hacer pruebas de calibración. Creo que con 80 segundos es más que suficiente
+	# Volvemos a activarlo para hacer pruebas de calibración.
 	while (bomba.Estado == 'OF' and bomba.Temperatura < temperatura):
-		# Activamos la bomba durante 80 segundos y esperamos 90 más para esperar a que llegue el calor al sensor
-		bomba.Controla(1, temperatura, 0, 80)
-		# Vamos comprobando la temperatura cada 10 segundos para un total de 170 segundos
-		for f in range(0, 17):
+		# Vamos comprobando la temperatura cada 10 segundos para un total de x segundos y después esperamos
+		for f in range(0, 6):
+			# Activamos la bomba durante x segundos y esperamos 60 más para que llegue el calor al sensor
+			bomba.Controla(1, temperatura, 0, 10)
 			time.sleep(10)
 			if bomba.LeeTemperatura() >= temperatura:
-				bomba.Controla(0)
 				break
-		Log('Despues de 80 + 90 segundos la temperatura es de ' + str(bomba.Temperatura) + 'º y al comenzar era de ' + str(temperatura -5) + 'º', True)
+		# Después de haber activado la bomba durante x segundos en tramos de 10, esperamos a ver si la temperatura sube
+		for g in range(0, 6):
+			time.sleep(10)
+			if bomba.LeeTemperatura() >= temperatura:
+				break			
+	Log('Despues de ' + str(f*10 + g*10) + ' segundos la temperatura es de ' + str(bomba.Temperatura) + 'º y al comenzar era de ' + str(temperatura -5) + 'º', True)
+	time.sleep(150)
+	Log('Después de 150 segundos más la temperatura es de ' + str(bomba.LeeTemperatura()) + 'º')
 	if False:
 		# Comprobamos si está desactivada la bomba y que la temperatura es menor del objetivo
 		while (not bomba.Estado == 'ON' and bomba.LeeTemperatura() < temperatura):
@@ -95,7 +107,7 @@ def Boton_detecta(pkt):
 	if pkt[ARP].op == 1: #network request
 		if pkt[ARP].hwsrc in MACs: # Si aparece un botón llamamos a la función que se encarga del control del funcionamiento de la bomba
 			Log('Detectado botón: ' + pkt[ARP].hwsrc, Debug)
-			Boton_Apretado(pkt[ARP].hwsrc)
+			Bomba()
 	return
 
 """ Función para detectar los Dash Buttons de Amazon y controlar la bomba de recirculación de agua caliente
@@ -106,7 +118,7 @@ if __name__ == "__main__":
 	""" En caso de que se ejecute desde la línea de comando, llamamos a la función dada como parámetro 1
 	"""
 	if len(sys.argv) == 2:
-		Boton_Apretado('Manual')
+		Bomba('Manual')
 		exit(0)
 	else:
 		# Lanzamos el bucle que se queda detectando las llamadas ARP. Este funcionará de manera ininterrumpida
