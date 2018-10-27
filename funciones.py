@@ -280,6 +280,10 @@ class SonoffTH:
 			# Para ir desarrollando el control totalmente automatizado embebido en el objeto
 			# Si la temperatura está por debajo de la requerida
 			while self.LeeTemperatura() < TMin:
+				# En caso de problema leyendo la temperatura
+				if self.Temperatura == 0:
+					Log('Hemos tenido problemas leyendo la Temperatura de la ' + self.Topico)
+					return False
 				# Calculamos el tiempo necesario para llegar a la temperatura deseada. Primero obtenemos los grados de diferencia
 				temperatura = TMin - self.Temperatura
 				# En base al tipo de instalación, definimos el coeficiente de tiempo por cada grado
@@ -312,8 +316,8 @@ class SonoffTH:
 						time.sleep(Tiempo)
 				# Esperamos un minuto para dar tiempo a que la temperatura en el sensor se estabilize
 				time.sleep(60)
-			Log('Desactivamos la ' + self.Topico + ' con una temperatura de ' + str(self.Temperatura) + 'º', self.Debug)
-		return
+			Log('Terminamos el control de la ' + self.Topico + ' con una temperatura de ' + str(self.Temperatura) + 'º', self.Debug)
+		return True
 
 	def LeeEstado(self):
 		""" Esta función obtiene el estado del SonOff para saber si está encendido o apagado
@@ -327,9 +331,9 @@ class SonoffTH:
 			# Damos algo de tiempo para procesar la respuesta
 			time.sleep(1)
 			bucle += 1
-			if bucle > 7:
+			if bucle > 2:
 				self.Debug = True
-			if bucle >= 10:
+			if bucle > 3:
 				Log('Ha habido un problema intentando obtener el estado', True)
 				break
 		return self.Estado
@@ -342,9 +346,9 @@ class SonoffTH:
 		# Lo importamos en formato json
 		self.mensaje = json.loads(message.payload.decode("utf-8"))
 		if self.Debug:
-			print('Debug, self.mensaje: ')
-			for f in self.mensaje:
-				print(f)
+			print('Debug, self.mensaje: ' + str(self.mensaje))
+			#for f in self.mensaje:
+				#print(f)
 		if 'StatusSNS' in self.mensaje:
 			# Extraemos la temperatura
 			self.Temperatura = int(self.mensaje["StatusSNS"]["DS18B20"]["Temperature"])
@@ -366,9 +370,9 @@ class SonoffTH:
 			# Damos algo de tiempo para procesar la respuesta
 			time.sleep(1)
 			bucle += 1
-			if bucle > 7:
+			if bucle > 2:
 				self.Debug = True
-			if bucle >= 10:
+			if bucle > 3:
 				Log('Ha habido un problema intentando obtener la temperatura', True)
 				break
 		return self.Temperatura
@@ -480,22 +484,29 @@ def BajaSeries(Debug = False):
 def Bomba(Debug = False):
 	""" Desde aquí controlamos el funcionamiento de la bomba.
 	"""
+	if type(Debug)==str:
+		Debug = eval(Debug)
 	# Creamos las instancias
-	bomba = SonoffTH('bomba')
+	bomba = SonoffTH('bomba', Debug)
 	if bomba == False:
+		Log('Nos ha devuelto un False la incialización de la bomba', True)
+		bomba.Fin()
 		return(False)
 	# Si la temperatura actual es mayor de 30º es que ya ha estado en funcionamiento, así que salimos
 	if bomba.Temperatura > 30:
 		Log('La temperatura de la bomba es de ' + str(bomba.Temperatura) + 'º, así que no la activamos', Debug)
-		del(bomba)
+		bomba.Fin()
 		return
-	placa = SonoffTH('placa')
+	placa = SonoffTH('placa', Debug)
 	if placa == False:
 		return(False)
 	# Si el agua no está caliente, activamos la placa. Hay que pasar este valor a la clase
 	TMin = 40
 	if placa.Temperatura < TMin:
-		placa.Controla(4)
+		if not placa.Controla(4):
+			Log('Nos ha devuelto un False el control de la placa', True)
+			placa.Fin()
+			return(False)
 	# Finalizamos el objeto
 	placa.Fin()
 	# Activamos la depuración dentro del objeto
@@ -1675,8 +1686,7 @@ def Placa(Quehacemos = 3, Tiempo = 0):
 	# Cambiamos el tipo del parámetro por si lo hemos llamado desde línea de comando y nos llega como string
 	Quehacemos = int(Quehacemos)
 	# En caso de control sencillo, como ya está programado en la clase lo pasamos directamente
-	if Quehacemos < 3:
-		placa.Controla(Quehacemos, Tiempo)
+	placa.Controla(Quehacemos, Tiempo)
 	# Si solo queremos la temperatura o aunque no la queramos, la devolvemos
 	temp = placa.Temperatura
 	# Eliminamos el objeto
