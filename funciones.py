@@ -331,10 +331,10 @@ class SonoffTH:
 			# Damos algo de tiempo para procesar la respuesta
 			time.sleep(1)
 			bucle += 1
-			if bucle > 2:
+			if bucle > 1:
 				self.Debug = True
 			if bucle > 3:
-				Log('Ha habido un problema intentando obtener el estado', True)
+				Log('Ha habido un problema intentando obtener el estado de la ' + self.Topico, True)
 				break
 		return self.Estado
 	
@@ -346,9 +346,7 @@ class SonoffTH:
 		# Lo importamos en formato json
 		self.mensaje = json.loads(message.payload.decode("utf-8"))
 		if self.Debug:
-			print('Debug, self.mensaje: ' + str(self.mensaje))
-			#for f in self.mensaje:
-				#print(f)
+			Log('Debug, self.mensaje: ' + str(self.mensaje))
 		if 'StatusSNS' in self.mensaje:
 			# Extraemos la temperatura
 			self.Temperatura = int(self.mensaje["StatusSNS"]["DS18B20"]["Temperature"])
@@ -370,10 +368,10 @@ class SonoffTH:
 			# Damos algo de tiempo para procesar la respuesta
 			time.sleep(1)
 			bucle += 1
-			if bucle > 2:
+			if bucle > 1:
 				self.Debug = True
 			if bucle > 3:
-				Log('Ha habido un problema intentando obtener la temperatura', True)
+				Log('Ha habido un problema intentando obtener la temperatura de la ' + self.Topico, True)
 				break
 		return self.Temperatura
 	
@@ -650,7 +648,7 @@ def BorraVistos(Liberar = 30):
 	lista = list(filter(None, lista.split('\n')))
 	borrar = []
 	# Hacemos un backup de los bookmarks
-	with open(env.LOG + 'Bookmarks.bak', 'w') as file:
+	with open(env.LOG[:-9] + 'Bookmarks.bak', 'w') as file:
 		for f in lista:
 			file.write(f + '\n')
 	# Seleccionamos los que han sido vistos más de un 95% o tiene un 0 que indica que se han visto completamente o que apenas se han empezado a ver
@@ -1632,15 +1630,17 @@ def PasaaBD(Fichero = '/var/log/placa.log'):
 	"""
 	import sqlite3
 	
-	con = sqlite3.connect('/mnt/e/.mini/placa.db')
+	# Nos vamos a la carpeta donde almacenaremos los logs
+	os.chdir('/mnt/e/.mini/')
+	con = sqlite3.connect('placa.db')
 	cursor = con.cursor()
 	# Creamos las tablas sólo la primera vez
 	# cursor.execute('''Create TABLE Placa (Fecha	Char(19)	Primary Key Not Null, Temperatura	Real	Not Null, Encendido	Int	Not Null)''')
 	# cursor.execute('''Create TABLE Bomba (Fecha	Char(19)	Primary Key Not Null, Temperatura	Real	Not Null, Encendido	Int	Not Null)''')
 	# Renombramos el log para no recibir más datos durante el proceso y cambiamos los permisos
-	os.system('sudo mv ' + Fichero + ' /mnt/e/.mini/placa_' + time.strftime('%Y%m%d') + '.log && sudo chmod 777 /mnt/e/.mini/placa_' + time.strftime('%Y%m%d') + '.log')
+	os.system('sudo mv ' + Fichero + ' placa_' + time.strftime('%H%M') + '.log && sudo chmod 777 placa_' + time.strftime('%H%M') + '.log')
 	# Cambiamos la variable para que apunte al fichero renombrado
-	Fichero = '/mnt/e/.mini/placa_' + time.strftime('%Y%m%d') + '.log'
+	Fichero = 'placa_' + time.strftime('%H%M') + '.log'
 	# Cargamos los datos de la placa. Idealmente, deberíamos hacer la criba nosotros y no a través del grep
 	Datos = list(filter(None,os.popen('grep -v STATUS10 ' + Fichero + ' | grep -v /POWER | grep -v bomba|grep -v UPTIME|grep -v RESULT').read().split('\n')))
 	Encendido = -1
@@ -1669,8 +1669,11 @@ def PasaaBD(Fichero = '/var/log/placa.log'):
 			contador += 1
 	con.commit()
 	con.close()
-	# Lo movemos al zip de los logs
-	os.system('zip -m /mnt/e/.mini/logs.zip ' + Fichero)
+	# Añadimos el log horario al del día
+	os.system('cat placa_' + time.strftime('%H%M') + '.log >> placa_' + time.strftime('%Y%m%d') + '.log && rm placa_' + time.strftime('%H%M') + '.log')
+	# Si es el último de la noche, lo movemos al zip de los logs 
+	if time.strftime('%H') == '23':
+		os.system('zip -m logs.zip placa_' + time.strftime('%Y%m%d') + '.log')
 	Log('Terminamos la importación de datos del log de la Placa a la BD con el ' + f[0:15] + '  y hemos importado ' + str(contador) + ' valores')
 
 def Placa(Quehacemos = 3, Tiempo = 0):
@@ -1884,54 +1887,48 @@ def SubCanciones(p1):
 	lista.save(p1[:-3] + 'for.srt', encoding='iso-8859-1')
 	return
 
-def Temperatura(Cada = 2, Cuantos = '850', Cual = 'Temperatura'):
-	""" Se encarga de crear una gráfica con la temperatura del agua en la placa solar de las últimas 24h
+def Temperatura(Cada = 2, Cual = 'Temperatura'):
+	""" Se encarga de crear una gráfica con la temperatura del agua en la placa solar de las últimas 24h y la última hora
+	"""
+	import sqlite3, datetime
+	# Importamos los últimos datos a la BD
+	PasaaBD()
+	# Cargamos los datos excluyendo los de la Bomba, por ahora
+	bd = sqlite3.connect('/mnt/e/.mini/placa.db')
+	cursor = bd.cursor()
+	# Obtenemos la fecha de ayer para sacar los de las últimas 24 horas
+	fecha = datetime.datetime.now() - datetime.timedelta(days = 1, minutes = 10)
+	datos = cursor.execute("Select * From placa Where Fecha > '" + fecha.strftime('%Y-%m-%d %H:%M') + "'")
+	Temperatura_CreaWeb(datos, Cada, Cual)
+	# Ahora obtenemos los datos de la última hora, dando un margen de 10 minutos
+	fecha = datetime.datetime.now() - datetime.timedelta(hours = 1, minutes = 10)
+	datos = cursor.execute("Select * From placa Where Fecha > '" + fecha.strftime('%Y-%m-%d %H:%M') + "'")
+	Temperatura_CreaWeb(datos, 1, 'TemperaturaH')
+	# Cerramos la base de datos
+	bd.close()
+	#Log('Generamos  la página de curva de temperatura')
+	return
+
+def Temperatura_CreaWeb(Datos, Cada = 2, Cual = 'Temperatura'):
+	""" Separamos la parte encargada de generar la página web para poder llamarla varias veces de cara a crear las páginas 
+	que necesitemos. Por ahora, solo hacemos la de las últimas 24h y la última hora, pero más adelante esperamos poder generarlas
+	a petición desde la web.
 	"""
 	# Cargamos la plantilla
 	with open(env.PLANTILLAS + 'Canvas.1') as file:
 		planti = file.read().split('\n')
 	planti[18] = ' ' * 28 + "xLabel: 'Cada " + str(int(Cada) * 5) + " minutos',"
-	# Cargamos los datos excluyendo los de la Bomba, por ahora
-	Datos = list(filter(None,os.popen('tail -' + Cuantos + ' /var/log/placa.log | grep -v STATUS10 | grep -v /POWER | grep -v bomba').read().split('\n')))
-	# Extraemos la información: hora, temperatura, estado
-	Lecturas = [[0,0,-1]]
-	cont = 0
-	for f in Datos:
-		# Si son datos del sensor, cargamos la hora:minutos y la temperatura
-		try:
-			mensaje = eval(f[f.index('{'):])
-		except:
-			continue
-		if 'DS18B20' in mensaje:
-			Lecturas[cont][0] = mensaje['Time'][11:16]
-			Lecturas[cont][1] = float(mensaje['DS18B20']['Temperature'])
-		if 'POWER' in mensaje:
-			if mensaje['POWER'] == 'ON':
-				Lecturas[cont][2] = 1
-			else:
-				Lecturas[cont][2] = 0
-		# Si ya tenemos ambos datos, pasamos al siguiente
-		if not Lecturas[cont][1] == 0 and not Lecturas[cont][2] == -1:
-			cont += 1
-			Lecturas.append([0,0,-1])
-	# Si la última lectura no está completa la elimino
-	if Lecturas[cont][2] == -1:
-		del Lecturas[cont]
 	# Abrimos la pagina web
 	with open(env.WEB + Cual + '.html', 'w') as file:
 		# Copiamos las primeras líneas antes de los datos
 		for f in range(0,25,1):
 			file.writelines(planti[f] + '\n')
-		cont = 0
 		# Escribimos el comienzo de los datos
 		file.writelines(' ' * 28 + "dataPoints: [")
+		cont = 0
 		escribir = []
 		espacios = 40
-		for f in Lecturas:
-			# Si la hora es 0 terminamos
-			if f[0] == 0:
-				break
-			cont += 1
+		for f in Datos:
 			# Para dejar el html bien identado
 			if len(escribir) == 0:
 				espacios = 0
@@ -1940,15 +1937,14 @@ def Temperatura(Cada = 2, Cuantos = '850', Cual = 'Temperatura'):
 			# Cogemos solo una de 'Cada' lecturas
 			if cont == int(Cada):
 				cont = 0
-				escribir.append(' ' * espacios + "{ x: '" + f[0] + "', y: " + str(f[1]) +", z: " + str(f[2]) + " },\n")
+				escribir.append(' ' * espacios + "{ x: '" + f[0][11:16] + "', y: " + str(f[1]) +", z: " + str(f[2]) + " },\n")
+			cont += 1
 		escribir[len(escribir) - 1] = escribir[len(escribir) - 1][0:-2] + "]\n"
 		# Pasamos los datos al html
 		for f in escribir:
 			file.writelines(f)
 		for f in range(25,len(planti),1):
 			file.writelines(planti[f] + '\n')
-	#Log('Generamos  la página de curva de temperatura')
-	return
 
 def Total(p1, Tam = 'T'):
 	""" Devuelve el espacio total que hay en un disco determinado en TB
