@@ -1,5 +1,6 @@
 service amule-daemon stop
-pkill -9 transmission-daemon
+pkill amule
+pkill -9 transm
 service minidlna stop
 service smbd stop
 #umount /mnt/e

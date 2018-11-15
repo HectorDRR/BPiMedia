@@ -15,7 +15,7 @@ if [ $? -eq 1 ]
 		pkill -9 amule
 		rm /mnt/e/.aMule/shareddir.dat
 		amuled -c /mnt/e/.aMule/ -f
-		sleep 3
+		sleep 10
 		compartidos
 		exit
 fi
@@ -28,4 +28,11 @@ if [ $? -eq 0 ]
 		#sudo service amule-daemon start
 		pkill -9 amule
 		amuled -c /mnt/e/.aMule/ -f
+fi
+# Comprobamos también si está vivo el proceso del boton
+pgrep python3
+if [ $? -eq 1 ]
+	then 
+		echo $(date) Botón parado, lo arrancamos de nuevo>>/tmp/mulacaida.txt
+		sudo screen -d -m -S Botones -h 20000 /home/hector/bin/boton.sh
 fi

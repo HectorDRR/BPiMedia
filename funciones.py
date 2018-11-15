@@ -214,12 +214,13 @@ class SonoffTH:
 		# Pedimos Estado
 		self.LeeEstado()
 	
-	def Controla(self, Modo, TMax = 45, TMin = 40, Tiempo = 0):
+	def Controla(self, Modo, TMax = 43, TMin = 40, Tiempo = 0):
 		""" Función encargada de controlar el SonOff de la placa a través de MQTT.
 		Si Controla: 0 Paramos la placa
 					 1 Activamos manualmente con opción de tiempo para desonexión automática
 					 2 Estamos controlando la placa de manera automática
-		Partimos de una consigna de 40º mínimo y 45 máximo que hemnos visto es suficiente para bañarnos los 3
+					 4 Nueva función de control automático de manera más segura, usando backlog para asegurarse de que no se queda nada conectado
+		Partimos de una consigna de 40º mínimo y 43º máximo que hemnos visto es suficiente para bañarnos los 3
 		TMax: Temperatura máxima a alcanzar cuando el control es automático
 		TMin: Temperatura mínima para proceder con el control automático
 		Tiempo: En segundos que queremos mantener la placa funcionando
@@ -482,6 +483,8 @@ def BajaSeries(Debug = False):
 def Bomba(Debug = False):
 	""" Desde aquí controlamos el funcionamiento de la bomba.
 	"""
+	import subprocess
+	
 	if type(Debug)==str:
 		Debug = eval(Debug)
 	# Creamos las instancias
@@ -490,27 +493,25 @@ def Bomba(Debug = False):
 		Log('Nos ha devuelto un False la incialización de la bomba', True)
 		bomba.Fin()
 		return(False)
-	# Si la temperatura actual es mayor de 30º es que ya ha estado en funcionamiento, así que salimos
-	if bomba.Temperatura > 30:
+	# Si la temperatura actual es mayor de 25º es que ya ha estado en funcionamiento, así que salimos
+	if bomba.Temperatura > 25:
 		Log('La temperatura de la bomba es de ' + str(bomba.Temperatura) + 'º, así que no la activamos', Debug)
 		bomba.Fin()
 		return
 	placa = SonoffTH('placa', Debug)
 	if placa == False:
-		return(False)
-	# Si el agua no está caliente, activamos la placa. Hay que pasar este valor a la clase
-	TMin = 40
-	if placa.Temperatura < TMin:
-		if not placa.Controla(4):
-			Log('Nos ha devuelto un False el control de la placa', True)
-			placa.Fin()
-			return(False)
+		Log('No hemos podido inicializar la placa, por lo que seguimos sin controlar la temperatura', True)
+	# Pasamos el valor a una variable para poder finalizar el objeto
+	tplaca = placa.Temperatura
 	# Finalizamos el objeto
 	placa.Fin()
-	# Activamos la depuración dentro del objeto
-	#bomba.Debug = True
-	# Objetivo a alcanzar. En principio, 3 grados más que la actual
-	temperatura = bomba.Temperatura + 3
+	# Si el agua no está caliente, activamos la placa. Hay que pasar este valor a la clase
+	TMin = 40
+	if tplaca < TMin:
+		# Temporalmente, creamos un subproceso para el tema de calentar el agua de la placa sin esperar para poder lanzar la bomba, que es lo que nos interesa. Y lo lanzamos el subproceso redirigiendo la salida y los errores a la misma variable
+		sub = subprocess.Popen(['python3','/home/hector/bin/funciones.py Placa 4'],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+	# Objetivo a alcanzar. En principio, 2 grados más que la actual
+	temperatura = bomba.Temperatura + 2
 	# Aplicamos el nuevo control automático embebido en la clase
 	#bomba.Controla (4, TMax = 35, TMin = 30)
 	# Lo dejamos inutilizado hasta confirmar que el control embebido está funcionando correctamente
@@ -691,23 +692,35 @@ def BP(Peli, Comentario):
 	return
 
 def Copia():
-	"""Se encarga de realizar una copia del contenido de ~/bin y /mnt/e/util modificado desde ayer al ftp del cine
+	"""Se encarga de realizar una copia del contenido de varias carpetas modificado desde ayer al ftp de Movelcan
 	"""
-	import clave
-	#Nos vamos a la carpeta bin
-	os.chdir('/home/hector/bin')
-	os.system('find . -maxdepth 1 -type f -mtime -1 -exec curl --ftp-pasv -T {} ftp://' + clave.FTPOnoUser + ':' + clave.FTPOnoPasswd + '@ftp.ono.com/bin/ \;')
-	#Nos vamos a la carpeta util
-	os.chdir('/mnt/e/util')
-	os.system('find . -maxdepth 1 -type f -mtime -1 -exec curl --ftp-pasv -T {} ftp://' + clave.FTPOnoUser + ':' + clave.FTPOnoPasswd + '@ftp.ono.com/util/ \;')
-	#Nos vamos a la carpeta de scripts de la web
-	os.chdir('/mnt/f/scripts')
-	os.system('find . -maxdepth 1 -type f -mtime -1 -exec curl --ftp-pasv -T {} ftp://' + clave.FTPOnoUser + ':' + clave.FTPOnoPasswd + '@ftp.ono.com/scripts/ \;')
-	#Método alternativo desde dentro de Python
-	#Nos conectamos
-	#ftp = FTP('cine.no-ip.info', user='u820276474', password='22celEborn')
-	#Nos cambiamos a la carpeta de destino
-	#ftp.cwd('bin')
+	from ftplib import FTP
+	import claves
+	
+	# Designamos las carpetas que copiar
+	rutas = ['/home/hector/bin', '/mnt/e/util', '/mnt/f/scripts', '/mnt/e/.mini']
+	# Abrimos la conexión FTP
+	ftp = FTP()
+	ftp.connect('files.000webhost.com', 21)
+	# Cambiamos encoding a utf8 para que se respeten los acentos
+	ftp.encoding='utf-8'
+	ftp.login(claves.FTPMovelcanUser, claves.FTPMovelcanPasswd)
+	ftp.cwd('Copias')
+	for f in rutas:
+		os.chdir(f)
+		# Obtenemos le nombre de la carpeta que será el del zip
+		carpeta = f[f.rfind('/') + 1:] + '.zip'
+		# Generamos el zip en /tmp con los ficheros modificados en el último día
+		os.system('find . -maxdepth 1 -type f -mtime -1 -exec zip /tmp/' + carpeta + ' {} \;')
+		# Si hay algo que copiar lo subimos por FTP a la carpeta del día en curso
+		if os.path.exists('/tmp/' + carpeta):
+			ftp.cwd(time.strftime('%a'))
+			with open('/tmp/' + carpeta, 'rb') as fichero:
+				Log('Copia de ' + f + ': ' + ftp.storbinary('STOR ' + carpeta, fichero).replace('\n', '. '), True)
+			ftp.cwd('..')
+			# Una vez transferido, lo eliminamos. Falta hacer un chequeo para comprobar que se ha subido correctamente
+			os.remove('/tmp/' + carpeta)
+	ftp.close()
 	return
 
 def CopiaNuevas(Pen):
@@ -818,7 +831,7 @@ def CreaWeb(p1 = 'Ultimas', Pocas = 0):
 		if not os.path.exists(env.TMP + p1):
 			# Creamos el fichero con las pelis o series a incluir en la página
 			if p1 == 'Todas':
-				os.system('cat ' + env.PLANTILLAS + 'HD*>' + env.TMP + 'Todas')
+				os.system('cat ' + env.PLANTILLAS + 'HD* >' + env.TMP + 'Todas')
 			else:
 				if p1 == 'Series':
 					deque = 'Series_*'
@@ -1630,23 +1643,31 @@ def PasaaBD(Fichero = '/var/log/placa.log'):
 	"""
 	import sqlite3
 	
+	# Confirmamos que existe el fichero placa.log
+	if not os.path.exists(Fichero):
+		Log('No hay nada que importar de la placa')
+		return
 	# Nos vamos a la carpeta donde almacenaremos los logs
 	os.chdir('/mnt/e/.mini/')
+	esotro = False
 	con = sqlite3.connect('placa.db')
 	cursor = con.cursor()
 	# Creamos las tablas sólo la primera vez
 	# cursor.execute('''Create TABLE Placa (Fecha	Char(19)	Primary Key Not Null, Temperatura	Real	Not Null, Encendido	Int	Not Null)''')
 	# cursor.execute('''Create TABLE Bomba (Fecha	Char(19)	Primary Key Not Null, Temperatura	Real	Not Null, Encendido	Int	Not Null)''')
-	# Renombramos el log para no recibir más datos durante el proceso y cambiamos los permisos
-	os.system('sudo mv ' + Fichero + ' placa_' + time.strftime('%H%M') + '.log && sudo chmod 777 placa_' + time.strftime('%H%M') + '.log')
-	# Cambiamos la variable para que apunte al fichero renombrado
-	Fichero = 'placa_' + time.strftime('%H%M') + '.log'
+	if Fichero == '/var/log/placa.log':
+		# Renombramos el log para no recibir más datos durante el proceso y cambiamos los permisos
+		os.system('sudo mv ' + Fichero + ' placa_' + time.strftime('%H%M') + '.log && sudo chmod 777 placa_' + time.strftime('%H%M') + '.log')
+		# Cambiamos la variable para que apunte al fichero renombrado
+		Fichero = 'placa_' + time.strftime('%H%M') + '.log'
+	else:
+		esotro = True
 	# Cargamos los datos de la placa. Idealmente, deberíamos hacer la criba nosotros y no a través del grep
 	Datos = list(filter(None,os.popen('grep -v STATUS10 ' + Fichero + ' | grep -v /POWER | grep -v bomba|grep -v UPTIME|grep -v RESULT').read().split('\n')))
 	Encendido = -1
 	Temperatura = 0.0
 	contador = 0
-	Log('Comenzamos la importación de datos de la Placa a la BD en sqlite3 con el primer dato: ' + Datos[0][0:15])
+	#Log('Comenzamos la importación de datos de la Placa a la BD en sqlite3 con el primer dato: ' + Datos[0][0:15])
 	for f in Datos:
 		try:
 			mensaje = eval(f[f.index('{'):])
@@ -1670,13 +1691,14 @@ def PasaaBD(Fichero = '/var/log/placa.log'):
 	con.commit()
 	con.close()
 	# Añadimos el log horario al del día
-	os.system('cat placa_' + time.strftime('%H%M') + '.log >> placa_' + time.strftime('%Y%m%d') + '.log && rm placa_' + time.strftime('%H%M') + '.log')
+	if not esotro:
+		os.system('cat ' + Fichero + ' >> placa_' + time.strftime('%Y%m%d') + '.log && rm ' + Fichero)
 	# Si es el último de la noche, lo movemos al zip de los logs 
 	if time.strftime('%H') == '23':
 		os.system('zip -m logs.zip placa_' + time.strftime('%Y%m%d') + '.log')
-	Log('Terminamos la importación de datos del log de la Placa a la BD con el ' + f[0:15] + '  y hemos importado ' + str(contador) + ' valores')
+		Log('Terminamos por hoy la importación de datos del log de la Placa a la BD con el ' + f[0:15] + '  y hemos importado ' + str(contador) + ' valores y comprimido el log')
 
-def Placa(Quehacemos = 3, Tiempo = 0):
+def Placa(Quehacemos = 4, Tiempo = 0):
 	""" Función encargada de controlar el SonOff de la placa a través de MQTT.
 	Si Quehacemos: 0 Paramos la placa
 				   1 Activamos la placa
@@ -1684,8 +1706,7 @@ def Placa(Quehacemos = 3, Tiempo = 0):
 				   Otro solo consultamos temperatura
 	"""
 	# Creamos la instancia
-	placa = SonoffTH('placa')
-	placa.Debug = True
+	placa = SonoffTH('placa', True)
 	# Cambiamos el tipo del parámetro por si lo hemos llamado desde línea de comando y nos llega como string
 	Quehacemos = int(Quehacemos)
 	# En caso de control sencillo, como ya está programado en la clase lo pasamos directamente
@@ -1897,19 +1918,24 @@ def Temperatura(Cada = 2, Cual = 'Temperatura'):
 	bd = sqlite3.connect('/mnt/e/.mini/placa.db')
 	cursor = bd.cursor()
 	# Obtenemos la fecha de ayer para sacar los de las últimas 24 horas
-	fecha = datetime.datetime.now() - datetime.timedelta(days = 1, minutes = 10)
+	fecha = datetime.datetime.now()
+	# Obtenemos cuantos minutso ha estado encedida la placa este mes
+	cuantos = cursor.execute("select count(Encendido) from placa where encendido=1 and fecha>'" + str(fecha.year) + "-" + str(fecha.month) + "-00'")
+	for f in cuantos:
+		Activo = f[0]
+	fecha = fecha - datetime.timedelta(days = 1, minutes = 10)
 	datos = cursor.execute("Select * From placa Where Fecha > '" + fecha.strftime('%Y-%m-%d %H:%M') + "'")
-	Temperatura_CreaWeb(datos, Cada, Cual)
+	Temperatura_CreaWeb(datos, Cada, Cual, Activo)
 	# Ahora obtenemos los datos de la última hora, dando un margen de 10 minutos
 	fecha = datetime.datetime.now() - datetime.timedelta(hours = 1, minutes = 10)
 	datos = cursor.execute("Select * From placa Where Fecha > '" + fecha.strftime('%Y-%m-%d %H:%M') + "'")
-	Temperatura_CreaWeb(datos, 1, 'TemperaturaH')
+	Temperatura_CreaWeb(datos, 1, 'TemperaturaH', Activo)
 	# Cerramos la base de datos
 	bd.close()
 	#Log('Generamos  la página de curva de temperatura')
 	return
 
-def Temperatura_CreaWeb(Datos, Cada = 2, Cual = 'Temperatura'):
+def Temperatura_CreaWeb(Datos, Cada = 2, Cual = 'Temperatura', Activo = 0):
 	""" Separamos la parte encargada de generar la página web para poder llamarla varias veces de cara a crear las páginas 
 	que necesitemos. Por ahora, solo hacemos la de las últimas 24h y la última hora, pero más adelante esperamos poder generarlas
 	a petición desde la web.
@@ -1923,8 +1949,10 @@ def Temperatura_CreaWeb(Datos, Cada = 2, Cual = 'Temperatura'):
 		# Copiamos las primeras líneas antes de los datos
 		for f in range(0,25,1):
 			file.writelines(planti[f] + '\n')
+		# Pasamos el valor de los minutos que ha estado activa la placa este mes
+		file.writelines(' ' * 28 + 'conectada: ' + str(Activo * 5) + ',\n')
 		# Escribimos el comienzo de los datos
-		file.writelines(' ' * 28 + "dataPoints: [")
+		file.writelines(' ' * 28 + 'dataPoints: [')
 		cont = 0
 		escribir = []
 		espacios = 40
