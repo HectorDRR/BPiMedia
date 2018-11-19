@@ -214,7 +214,7 @@ class SonoffTH:
 		# Pedimos Estado
 		self.LeeEstado()
 	
-	def Controla(self, Modo, TMax = 43, TMin = 40, Tiempo = 0):
+	def Controla(self, Modo, TMax = 37, TMin = 35, Tiempo = 0):
 		""" Función encargada de controlar el SonOff de la placa a través de MQTT.
 		Si Controla: 0 Paramos la placa
 					 1 Activamos manualmente con opción de tiempo para desonexión automática
@@ -360,7 +360,15 @@ class SonoffTH:
 		""" Esta función obtiene la temperatura actual del sensor del SonOff. Requiere que el bucle sea 
 		iniciado y cerrado desde la función llamante.
 		Debido a que a veces no responde a tiempo esperamos hasta que se produzca la respuesta.
+		Al mover el sensor a la tubería, requerimos activar la bomba unos segundos antes de poder leer la temperatura real.
 		"""
+		if self.Topico == 'placa':
+			# Creamos la instancia de la Bomba
+			bomba = SonoffTH('bomba', True)
+			# La activamos por 10 segundos
+			bomba.Controla(1, Tiempo = 10)
+			# Esperamos unos segundos más para que se caliente la sonda
+			time.sleep(30)
 		bucle = 0
 		self.Temperatura = 0
 		while self.Temperatura == 0:
@@ -908,10 +916,12 @@ def CreaWeb(p1 = 'Ultimas', Pocas = 0):
 			termina = '</a>'
 		else:
 			mfaltan.append(peli)
-		trai = Trailer(peli)
-		# Añadimos un \n para que sea más fácil localizarlo desde el curro para anunciar las pelis
-		if len(trai) > 0:
-			trai = '\n <a href="' + trai + '" target="_trailer">[T]</a>\n'
+		# Modificamos para no buscar el trailer en las series, ya que la mayoría no tienen y solo generamos basura en el log
+		if ser != 's':
+			trai = Trailer(peli)
+			# Añadimos un \n para que sea más fácil localizarlo desde el curro para anunciar las pelis
+			if len(trai) > 0:
+				trai = '\n <a href="' + trai + '" target="_trailer">[T]</a>\n'
 		else:
 			trai = ''
 			tfaltan.append(peli)
@@ -1704,17 +1714,41 @@ def Placa(Quehacemos = 4, Tiempo = 0):
 				   1 Activamos la placa
 				   2 Estamos controlando la placa de manera automática (Las consignas de temperatura están establecidas por defecto en la clase)
 				   Otro solo consultamos temperatura
+	En caso de solo querer apagarla vamos a prescindir del MQTT e ir directamente usando el curl
 	"""
-	# Creamos la instancia
-	placa = SonoffTH('placa', True)
 	# Cambiamos el tipo del parámetro por si lo hemos llamado desde línea de comando y nos llega como string
 	Quehacemos = int(Quehacemos)
-	# En caso de control sencillo, como ya está programado en la clase lo pasamos directamente
-	placa.Controla(Quehacemos, Tiempo)
-	# Si solo queremos la temperatura o aunque no la queramos, la devolvemos
-	temp = placa.Temperatura
-	# Eliminamos el objeto
+	# Inicializamos temp por si nos despistamos antes de hacer el return
+	temp = 0
+	# Si solo queremos apagar, mandamos el comando por curl y evitamos la inicialización de la clase
+	if Quehacemos == 0:
+		import pycurl
+		from io import BytesIO
+		buffer = BytesIO()
+		c = pycurl.Curl()
+		c.setopt(c.URL, 'http://192.168.1.9/cm?cmnd=Power%20Off')
+		c.setopt(c.WRITEDATA, buffer)
+		c.perform()
+		c.close()
+		return
+	# Creamos la instancia de la bomba
+	bomba = SonoffTH('bomba', True)
+	# Activamos la bomba 10 segundos para que el agua llegue a la sonda en la tubería y la caliente
+	bomba.Controla(1, Tiempo = 10)
+	# Esperamos 30 segundos para que coja temperatura el sensor
+	time.sleep(30)
+	# Creamos la instancia de la placa
+	placa = SonoffTH('placa', True)
+	if (placa.LeeTemperatura() > 30 and Quehacemos == 4):
+		Log('La temperatura del agua está a ' + str(placa.Temperatura) + 'º, por lo que no la activamos', True)
+	else:
+		# En caso de control sencillo, como ya está programado en la clase lo pasamos directamente
+		placa.Controla(Quehacemos, Tiempo)
+		# Si solo queremos la temperatura o aunque no la queramos, la devolvemos
+		temp = placa.Temperatura
+	# Eliminamos los objetos
 	placa.Fin()
+	bomba.Fin()
 	return temp
 
 def Prueba(Param):
@@ -1920,9 +1954,7 @@ def Temperatura(Cada = 2, Cual = 'Temperatura'):
 	# Obtenemos la fecha de ayer para sacar los de las últimas 24 horas
 	fecha = datetime.datetime.now()
 	# Obtenemos cuantos minutso ha estado encedida la placa este mes
-	cuantos = cursor.execute("select count(Encendido) from placa where encendido=1 and fecha>'" + str(fecha.year) + "-" + str(fecha.month) + "-00'")
-	for f in cuantos:
-		Activo = f[0]
+	Activo = list(cursor.execute("select count(Encendido) from placa where encendido=1 and fecha>'" + str(fecha.year) + "-" + str(fecha.month) + "-00'"))[0][0]
 	fecha = fecha - datetime.timedelta(days = 1, minutes = 10)
 	datos = cursor.execute("Select * From placa Where Fecha > '" + fecha.strftime('%Y-%m-%d %H:%M') + "'")
 	Temperatura_CreaWeb(datos, Cada, Cual, Activo)
