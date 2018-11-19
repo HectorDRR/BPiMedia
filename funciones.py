@@ -34,7 +34,7 @@ class Capitulo:
 		Todo: El nombre completo del fichero
 		ConSerie: El nombre completo con el nombre de la Serie como prefijo para ponerlo en una carpeta Serie[\\,/]Todo
 	"""
-	def __init__(self, Todo):
+	def __init__(self, Todo, FTP = False):
 		""" Inicializamos las variables y dividimos el nombre del capítulo en sus componentes
 		"""
 		self.Todo = Todo
@@ -61,7 +61,7 @@ class Capitulo:
 			self.Capi = Todo[Todo.find('x',len(result[0])+1)+1:Todo.find(buscar,len(result[0])+1)]
 			self.Tipo = Todo[-3:]
 			# Limpiamos el nombre del capítulo
-			self.Limpia()
+			self.Limpia(FTP)
 			self.ConSerie = self.Serie + env.DIR + self.Todo
 		else:
 			self.Ok = False
@@ -143,7 +143,7 @@ class Capitulo:
 		# Siempre devolvemos True porque de no existir, la creamos justo antes de retornar. Habrá que ver si en el futuro habrá que cambiarlo
 		return True
 		
-	def Limpia(self):
+	def Limpia(self, FTP = False):
 		""" Limpiamos el nombre del capítulo para quitar lo incluido entre corchetes
 		"""
 		donde = self.Titulo.find('[')
@@ -152,11 +152,13 @@ class Capitulo:
 			if self.Titulo[donde-1] == ' ':
 				donde -= 1
 			sinf = self.Serie + ' ' + self.Temp + 'x' + self.Capi + ' ' + self.Titulo[0:donde] + '.' + self.Tipo
-			try:
-				os.rename(self.Todo, sinf)
-			except OSError as e:
-				print('Ha ocurrido un error renombrando el fichero ' + sinf + ': ' + e.strerror)
-			# Log('Limpiamos el nombre del fichero %s a %s' % (f, sinf))
+			if not FTP:
+				try:
+					os.rename(self.Todo, sinf)
+				except OSError as e:
+					print('Ha ocurrido un error renombrando el fichero ' + sinf + ': ' + e.strerror)
+			else:
+				FTP.rename(self.Todo, sinf)
 			self.Titulo = self.Titulo[0:donde]
 			self.Todo = sinf
 		return
@@ -395,7 +397,7 @@ class SonoffTH:
 		self.client.loop_stop()
 		del(self.client)
 	
-def BajaSeries(Debug = False):
+def BajaSeries(Batch = False, Debug = False):
 	""" Se conecta por FTP a la mula para comprobar si hay nuevos capítulos de las series que tenemos
 	en el curro y bajarse los que falten.
 	Tenemos pendiente implementar control de capítulos sobreescritos por problemas
@@ -405,6 +407,7 @@ def BajaSeries(Debug = False):
 	from ftplib import FTP
 	import claves
 	# Para convertir a boleano el valor del parámetro
+	Batch = (Batch == 'True')
 	Debug = (Debug == 'True')
 	# Nos vamos a las Pelis
 	os.chdir(env.HD)
@@ -430,8 +433,12 @@ def BajaSeries(Debug = False):
 	# Empezamos a bajarnos las películas
 	for f in lista:
 		if not Queda(f, env.HD, ftp):
-			if input('No queda espacio suficiente en ' + env.HD[0:2] + ', limpia') == 'n':
-					continue
+			if Batch:
+				Log('No queda espacio en Z para copiar ' + f)
+				continue
+			else:
+				if input('No queda espacio suficiente en ' + env.HD[0:2] + ', limpia') == 'n':
+						continue
 		with open(f, 'wb') as file:
 			Log('Descargamos ' + f, Debug)
 			if ftp.retrbinary('RETR ' + f, file.write, 10240) == '226 Transfer complete.':
@@ -445,7 +452,7 @@ def BajaSeries(Debug = False):
 	lista = ftp.nlst()
 	print(lista)
 	for f in lista:
-		capi = Capitulo(f)
+		capi = Capitulo(f, ftp)
 		# Si no es una serie o no está en la lista, la movemos a otros y pasamos al siguiente
 		if not capi.Ok:
 			destino = '/mnt/e/otros/'
