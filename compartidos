@@ -1,0 +1,12 @@
+# Macro que se encarga de recrear el fichero shareddir.dat del amule para compartir las carpetas que se hayan creado nuevas
+rm /mnt/e/.aMule/shareddir.dat
+echo /mnt/e/Berna >/mnt/e/.aMule/shareddir.dat
+find /mnt/e/Berna/ -type f -not -empty -printf "%h\n" | uniq |sort -u >>/mnt/e/.aMule/shareddir.dat
+echo /mnt/e/HD >>/mnt/e/.aMule/shareddir.dat
+echo /mnt/e/otros >>/mnt/e/.aMule/shareddir.dat
+echo /mnt/e/pasados >>/mnt/e/.aMule/shareddir.dat
+find /mnt/e/pasados/ -type f -not -empty -printf "%h\n" | uniq |sort -u >>/mnt/e/.aMule/shareddir.dat
+echo /mnt/e/Series >>/mnt/e/.aMule/shareddir.dat
+# iconv -f iso-8859-1 -t utf8 -o /tmp/sha /mnt/e/.aMule/shareddir.dat
+# mv /tmp/sha /mnt/e/.aMule/shareddir.dat
+amulecmd -c "reload shared"

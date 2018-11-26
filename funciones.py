@@ -1,4 +1,4 @@
-#! /usr/bin/env python3 
+#! /usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Funciones.py Conjunto de macros para gestionar las descargas del emule, torrent, y la creación y mantenimiento de mi página web
@@ -16,10 +16,25 @@ import stat
 
 # Definición de variables para hacer la macro portable entre distintas configuraciones/plataformas
 env = __import__('Entorno_' + sys.platform)
+# Aunque la lectura de los ficheros es rápida, creamos una variable global que contenga todas las series para
+# no estarlas cargando cada vez que queremos comprobar un capítulo desde Capitulo.Existe()
+Series = []
+# Para poder leer la temperatura y el estado del SonOff
+Temp = 0.0
+Estado = ''
 
 class Capitulo:
-	'Tratamiento de capítulos de series'
-	def __init__(self, Todo):
+	""" Tratamiento de capítulos de series
+	Dividimos el nombre en:
+		Titulo: Solo el título del capítulo
+		Serie: El nombre de la Serie
+		Capi: el número del capítulo
+		Temp: El número de la temporada
+		Tipo: La extensión
+		Todo: El nombre completo del fichero
+		ConSerie: El nombre completo con el nombre de la Serie como prefijo para ponerlo en una carpeta Serie[\\,/]Todo
+	"""
+	def __init__(self, Todo, FTP = False):
 		""" Inicializamos las variables y dividimos el nombre del capítulo en sus componentes
 		"""
 		self.Todo = Todo
@@ -46,7 +61,7 @@ class Capitulo:
 			self.Capi = Todo[Todo.find('x',len(result[0])+1)+1:Todo.find(buscar,len(result[0])+1)]
 			self.Tipo = Todo[-3:]
 			# Limpiamos el nombre del capítulo
-			self.Limpia()
+			self.Limpia(FTP)
 			self.ConSerie = self.Serie + env.DIR + self.Todo
 		else:
 			self.Ok = False
@@ -54,29 +69,81 @@ class Capitulo:
 		#print(self.__dict__)
 		return
 
-	def Existe(self):
-		""" Para comprobar si la serie ya existe y procurar ponerle el mismo nombre que ya tiene
+	def Existe(self, FTP = False, Debug = False):
+		""" Para comprobar si la serie ya existe y procurar ponerle el mismo nombre que ya tiene o si no existe,
+		crear su carpeta
 		"""
 		# Cargamos las series que conocemos actualmente para no confundir las mayúsculas y minúsculas
-		Series = next(os.walk(env.MM + 'scaratulas'))[2]
-		# Quitamos la extensión de la carátula
-		Series = [f[0:-4] for f in Series]
+		# Lo hacemos usando una variable global para optimizar
+		global Series
+		Existe = False
+		# Asignamos el destino a PASADOS
+		destino = '/mnt/e/pasados/'
+		# En caso de que aún no las hayamos cargado, cargamos las series, tanto de las que ya tienen carátulas como de las que
+		# están en pasados pero que aún no hemos copiado o creado carátula
+		if len(Series) == 0:
+			if FTP:
+				# Guardamos la carpeta actual
+				anterior = FTP.pwd()
+				FTP.cwd('/mnt/f/scaratulas/')
+				Series = FTP.nlst()
+				FTP.cwd(destino)
+				SinCaratula = FTP.nlst()
+				# Volvemos a la carpeta inicial
+				FTP.cwd(anterior)
+			else:
+				Series = next(os.walk(env.MM + 'scaratulas'))[2]
+				SinCaratula = next(os.walk(env.PASADOS))[2]
+			# Quitamos la extensión de la carátula
+			Series = [f[0:-4] for f in Series]
+			# Para las nuevas que aún no tengamos carátulas y no se nos empiecen a copiar con distintos nombres
+			Series += SinCaratula
 		# Comprobamos que no ha habido un error con las minúsculas y mayúsculas
-		for s in Series:
-			# Si el nombre en mayúsculas es igual, pero no lo es el original
-			if s.upper() == self.Serie.upper() and not s == self.Serie:	
-				# Renombramos el fichero original con el nombre que ha de tener
-				os.rename(self.Todo, self.Todo.replace(self.Serie,s))
-				# Cambiamos también las variables
-				self.Todo = self.Todo.replace(self.Serie,s)
-				self.ConSerie = self.ConSerie.replace(self.Serie,s)
-				self.Serie = s
-				# Consideramos que la serie existe
-				return True
+		if self.Serie in Series:
+			Existe = True
+			# Comprobamos que existe la carpeta en Pasados, ya que es posible que la Serie exista pero la carpeta no
+			if FTP:
+				actual = FTP.pwd()
+				try:
+					FTP.cwd(destino + self.Serie)
+				except:
+					Log('Creamos la carpeta ' + self.Serie + ' en remoto', Debug)
+					FTP.mkd(destino + self.Serie)
+				# Volvemos a nuestra carpeta
+				FTP.cwd(actual)
+		else:
+			for s in Series:
+				# Si el nombre en mayúsculas es igual, pero no lo es el original
+				if s.upper() == self.Serie.upper() and not s == self.Serie:	
+					# Renombramos el fichero original con el nombre que ha de tener
+					# print('Nombre actual: ' + self.Serie, 'Nombre correcto: ' + s, 'Nombre a cambiar: ' + self.Todo.replace(self.Serie,s))
+					if FTP:
+						FTP.rename(self.Todo, self.Todo.replace(self.Serie,s))
+					else:
+						os.rename(self.Todo, self.Todo.replace(self.Serie,s))
+					# Cambiamos también las variables
+					self.Todo = self.Todo.replace(self.Serie,s)
+					self.ConSerie = self.ConSerie.replace(self.Serie,s)
+					self.Serie = s
+					# Consideramos que la serie existe
+					Existe = True
+					break
 		# Si llegamos hasta aquí es que no existe la carpeta ni hay un error en mayúsculas/minúsculas
-		return False
+		if not Existe:
+			# Creamos la carpeta
+			if FTP:
+				try:
+					FTP.mkd(destino + self.Serie)
+				except:
+					Log('Ha habido un error creando por FTP la carpeta ' + destino + self.Serie, True)
+			else:
+				os.mkdir(env.PASADOS + self.Serie)
+			# La añadimos a la lista para no intentar volver a crearla
+			Series.append(self.Serie)
+		# Siempre devolvemos True porque de no existir, la creamos justo antes de retornar. Habrá que ver si en el futuro habrá que cambiarlo
+		return True
 		
-	def Limpia(self):
+	def Limpia(self, FTP = False):
 		""" Limpiamos el nombre del capítulo para quitar lo incluido entre corchetes
 		"""
 		donde = self.Titulo.find('[')
@@ -85,16 +152,225 @@ class Capitulo:
 			if self.Titulo[donde-1] == ' ':
 				donde -= 1
 			sinf = self.Serie + ' ' + self.Temp + 'x' + self.Capi + ' ' + self.Titulo[0:donde] + '.' + self.Tipo
-			try:
-				os.rename(self.Todo, sinf)
-			except OSError as e:
-				print('Ha ocurrido un error renombrando el fichero ' + sinf + ': ' + e.strerror)
-			# Log('Limpiamos el nombre del fichero %s a %s' % (f, sinf))
+			if not FTP:
+				try:
+					os.rename(self.Todo, sinf)
+				except OSError as e:
+					print('Ha ocurrido un error renombrando el fichero ' + sinf + ': ' + e.strerror)
+			else:
+				FTP.rename(self.Todo, sinf)
 			self.Titulo = self.Titulo[0:donde]
 			self.Todo = sinf
 		return
 
-def BajaSeries():
+	def Vemos(self):
+		""" Si el capítulo está en la lista de series que estamos viendo
+		"""
+		#Leemos las series que estamos viendo para no borrarlas
+		with open (env.SERIESVER) as file:
+			ver = file.readlines()
+		ver = [x[:-1] for x in ver]
+		if self.Serie in ver:
+			return True
+		return False
+
+class SonoffTH:
+	""" Para manipular los SonOff con sensor de temperatura
+	"""
+	#import paho.mqtt.client as mqtt
+	
+	def __init__(self, Topico, Debug = False):
+		""" Inicializamos el objeto con el tópico que hemos asignado al SonOff
+		"""
+		# Por si queremos imprimir los mensajes
+		self.Debug = Debug
+		self.Topico = Topico
+		# Creo el cliente
+		#self.client = self.mqtt.Client(Topico)
+		# Conecto al broker
+		#self.client.connect('192.168.1.8')
+		# Asigno la función que va a procesar los mensajes recibidos
+		#self.client.on_message = self.SonOff_leo
+		# Lo despertamos de su letargo para que nos responda más rápido, ya que hemos observado que con el sleep activado tarda más tiempo
+		#self.client.publish('cmnd/' + self.Topico + '/SLEEP', '0')
+		# Al cambiar el sleep, se reinicia, por lo que hay que darle un par de segundos para que vuelva a estar activos
+		#time.sleep(15)
+		# Me subscribo a los tópicos necesarios, Estado y Temperatura
+		#self.client.subscribe([('stat/' + self.Topico + '/RESULT', 0), ('stat/' + self.Topico + '/STATUS10', 0)])
+		# Comenzamos el bucle
+		#self.client.loop_start()
+		# Pedimos Temperatura
+		self.LeeTemperatura()
+		# Pedimos Estado
+		self.LeeEstado()
+	
+	def Controla(self, Modo, TMax = 35, TMin = 33, Tiempo = 0):
+		""" Función encargada de controlar el SonOff de la placa a través de MQTT.
+		Si Controla: 0 Paramos la placa
+					 1 Activamos manualmente con opción de tiempo para desonexión automática
+					 2 Estamos controlando la placa de manera automática
+					 4 Nueva función de control automático de manera más segura, usando backlog para asegurarse de que no se queda nada conectado
+		Partimos de una consigna de 40º mínimo y 43º máximo que hemnos visto es suficiente para bañarnos los 3
+		TMax: Temperatura máxima a alcanzar cuando el control es automático
+		TMin: Temperatura mínima para proceder con el control automático
+		Tiempo: En segundos que queremos mantener la placa funcionando
+		
+		**Por seguridad, por si hubiera algún problema con la mulita o pérdida de conexió Wifi, procedemos a usar el comando
+		'backlog' que nos permite agrupar varios comandos en una sola orden, de manera que siempre que activemos el SonOff
+		también le mandaremos la orden de apagado con un delay en medio. De esta manera, aunque el programa o la conexión 
+		fallen nos aseguramos de que el sonfoff se desactivará tras el tiempo de 'delay' enviado, que es un máximo de 6 minutos
+		
+		Tiempo: Por ahora, solo lo aplicamos al control manual de encendido. Si es >0 damos la orden de encender 
+		durante ese tiempo y después apagar
+		
+		*Pendiente implementar el control automático con tiempos tanto para la placa como para la bomba dentro de la clase
+		Elevar 1º en la placa puede suponer unos 10 minutos, mientras que en la bomba es menos
+		"""
+		# En caso de pasarlo desde línea de comando como string, lo pasamos a int. Si ya viene como int no pasa nada
+		Modo = int(Modo)
+		TMax = int(TMax)
+		TMin = int(TMin)
+		Teimpo = int(Tiempo)
+		if (Modo == 0 and self.LeeEstado() == 'ON'):
+			# Paramos el SonOff
+			#self.client.publish('cmnd/' + self.Topico + '/POWER', 'OFF')
+			self.MandaCurl('Power Off')
+			if self.Debug:
+				print(self.Topico + ': Power Off ' + self.LeeEstado())
+			Log('Desactivamos la ' + self.Topico + ' manualmente', self.Debug)
+			return
+		if (Modo == 1 and self.Estado == 'OF'):
+			if Tiempo == 0:
+				# Activamos el SonOff
+				#self.client.publish('cmnd/' + self.Topico + '/POWER', 'ON')
+				self.MandaCurl('Power On')
+				if self.Debug:
+					print(self.Topico + 'Power ON', 'Estado: ' + self.LeeEstado())
+				Log('Activamos la ' + self.Topico + ' manualmente', self.Debug)
+			else:
+				# Activamos el SonOff por un tiempo determinado. El tiempo nos viene en segundos pero el SonOff lo recibe en ms
+				#self.client.publish('cmnd/' + self.Topico + '/BACKLOG', 'POWER ON;DELAY ' + str(Tiempo * 10) + ';POWER OFF')
+				self.MandaCurl('Backlog Power on;Delay ' + str(Tiempo) + '0;Power Off')
+				if self.Debug:
+					print(self.Topico + 'Backlog Power on;Delay ' + str(Tiempo) + '0;Power Off\nEstado: ' + self.LeeEstado())
+				Log('Activamos la ' + self.Topico + ' manualmente durante ' + str(Tiempo) + ' segundos', self.Debug)
+			return
+		if Modo == 2:
+			# Si la temperatura está por debajo de la requerida
+			if self.LeeTemperatura() < TMin:
+				# Si está desactivada, la activamos
+				if self.Estado == 'OF':
+					#self.client.publish('cmnd/' + self.Topico + '/POWER', 'ON')
+					self.MandaCurl('Power On')
+					Log('Activamos la ' + self.Topico, self.Debug)
+			# Subimos la consigna ,en el caso de la placa, debido a que el sensor está demasiado cerca de la resistencia y la temperatura 
+			# sube muy rápido y no refleja la real del agua
+			if self.Temperatura > TMax:
+				# Si está activada, la paramos
+				if self.Estado == 'ON':
+					#self.client.publish('cmnd/' + self.Topico + '/POWER', 'OFF')
+					self.MandaCurl('Power Off')
+					Log('Desactivamos la ' + self.Topico + '', self.Debug)
+			return
+		if Modo == 4:
+			# Para ir desarrollando el control totalmente automatizado embebido en el objeto
+			# Si la temperatura está por debajo de la requerida
+			while self.LeeTemperatura() < TMin:
+				# En caso de problema leyendo la temperatura
+				if self.Temperatura == 0:
+					Log('Hemos tenido problemas leyendo la Temperatura de la ' + self.Topico)
+					return False
+				# Calculamos el tiempo necesario para llegar a la temperatura deseada. Primero obtenemos los grados de diferencia
+				temperatura = TMin - self.Temperatura
+				# En base al tipo de instalación, definimos el coeficiente de tiempo por cada grado
+				if self.Topico == 'bomba':
+					# En el caso de la bomba, 12 segundos por grado
+					grado = 12
+				elif self.Topico == 'placa':
+					# En el caso de la placa, partiendo de 1,5 kW de resistencia y 200 l de depótiso obtenemos unos 10 minutos
+					grado = 600
+				Tiempo = temperatura * grado
+				# Solo podemos poner un delay de máximo 6 minutos, y la placa necesita 10 minutos por grado
+				# Si está desactivada, la activamos
+				if self.Estado == 'OF':
+					Log('Activamos la ' + self.Topico + ' durante ' + str(Tiempo) + ' segundos partiendo de una temperatura de ' + str(self.Temperatura) + 'º', self.Debug)
+					if Tiempo > 360:
+						# En caso de tenerla que mantener más de 6 minutos encendida los hacemos en tramos de 6 minutos
+						for f in range(0, Tiempo // 360, 1):
+							#self.client.publish('cmnd/' + self.Topico + '/BACKLOG', 'POWER ON;DELAY 3600;POWER OFF')
+							self.MandaCurl('BACKLOG POWER ON;DELAY 3600;POWER OFF')
+							time.sleep(362)
+							# Para ir monitorizando, vamos pasando al log la temperatura
+							Log('Temperatura de la ' + self.Topico + ': ' + str(self.LeeTemperatura()) + 'º', self.Debug)
+							if self.Temperatura >= TMax:
+								break
+						# Y por último, la mantenemos encendida el tiempo restante no múltiplo de 6 minutos
+						# Al delay el tiempo se le pasa en décimas de segundo, así que en vez de * 10 sencillamente le añadimos un 0
+						#self.client.publish('cmnd/' + self.Topico + '/BACKLOG', 'POWER ON;DELAY ' + str(Tiempo % 360) + '0;POWER OFF')
+						self.MandaCurl('BACKLOG POWER ON;DELAY ' + str(Tiempo % 360) + '0;POWER OFF')
+						time.sleep(Tiempo % 360 + 2)
+					else:
+						#self.client.publish('cmnd/' + self.Topico + '/BACKLOG', 'POWER ON;DELAY ' + str(Tiempo) + '0;POWER OFF')
+						self.MandaCurl('BACKLOG POWER ON;DELAY ' + str(Tiempo) + '0;POWER OFF')
+						time.sleep(Tiempo + 2)
+				# Esperamos un minuto para dar tiempo a que la temperatura en el sensor se estabilize
+				# time.sleep(60)
+			Log('Terminamos el control de la ' + self.Topico + ' con una temperatura de ' + str(self.Temperatura) + 'º', self.Debug)
+		return True
+
+	def LeeEstado(self):
+		""" Esta función obtiene el estado del SonOff para saber si está encendido o apagado
+		Debido a que a veces no responde a tiempo esperamos hasta que se produzca la respuesta.
+		"""
+		bucle = 0
+		self.Estado = eval(self.MandaCurl('Power'))['POWER'][0:2]
+		return self.Estado
+	
+	def SonOff_leo(self, client, userdata, message):
+		""" Esta función es llamada desde SonOff para hacer las lecturas y procesar los mensajes suscritos de SonOff
+		"""
+		import json
+
+		# Lo importamos en formato json
+		self.mensaje = json.loads(message.payload.decode("utf-8"))
+		if self.Debug:
+			Log('Debug, self.mensaje: ' + str(self.mensaje))
+		if 'StatusSNS' in self.mensaje:
+			# Extraemos la temperatura
+			self.Temperatura = int(self.mensaje["StatusSNS"]["DS18B20"]["Temperature"])
+		elif 'POWER' in self.mensaje:
+			# Extraemos el estado
+			self.Estado = self.mensaje["POWER"][0:2]
+		return
+
+	def LeeTemperatura(self):
+		""" Esta función obtiene la temperatura actual del sensor del SonOff. Requiere que el bucle sea 
+		iniciado y cerrado desde la función llamante.
+		Debido a que a veces no responde a tiempo esperamos hasta que se produzca la respuesta.
+		Al mover el sensor a la tubería, requerimos activar la bomba unos segundos antes de poder leer la temperatura real.
+		"""
+		if self.Topico == 'placa':
+			# Activamos la bomba 15 segundos. Tenemos que cambiar el tópico temporalmente para que self.MandaCurl funcione correctamente
+			self.Topico = 'bomba'
+			self.MandaCurl('backlog power on;delay 150;power off')
+			self.Topico = 'placa'
+			# Esperamos un rato para que llegue el caor al sensor
+			time.sleep(100)
+		self.Temperatura = round(eval(self.MandaCurl('Status 10'))['StatusSNS']['DS18B20']['Temperature'])
+		return self.Temperatura
+
+	def MandaCurl(self, Comando):
+		import pycurl
+		from io import BytesIO
+		buffer = BytesIO()
+		c = pycurl.Curl()
+		c.setopt(c.URL, 'http://' + self.Topico + '/cm?cmnd=' + Comando.replace(' ','%20'))
+		c.setopt(c.WRITEDATA, buffer)
+		c.perform()
+		c.close()
+		return buffer.getvalue().decode()
+		
+def BajaSeries(Batch = False, Debug = False):
 	""" Se conecta por FTP a la mula para comprobar si hay nuevos capítulos de las series que tenemos
 	en el curro y bajarse los que falten.
 	Tenemos pendiente implementar control de capítulos sobreescritos por problemas
@@ -102,21 +378,168 @@ def BajaSeries():
 	Y también aquellas que ya no están en el servidor
 	"""
 	from ftplib import FTP
-	# Nos vamos a PASADOS
-	os.chdir(env.PASADOS)
-	# Obtenemos las series que estamos trayendo
-	listalocal = os.listdir()
+	import claves
+	# Para convertir a boleano el valor del parámetro
+	Batch = (Batch == 'True')
+	Debug = (Debug == 'True')
+	# Nos vamos a las Pelis
+	os.chdir(env.HD)
 	# Ahora realizamos la conexión al servidor FTP
 	ftp = FTP()
 	ftp.connect('hrr.no-ip.info', 2211)
-	ftp.login('hector', '44celeborN')
-	ftp.cwd('pasados/')
-	listaremota = ftp.nlst()
-	
+	# Cambiamos encoding a utf8 para que se respeten los acentos
+	ftp.encoding='utf-8'
+	ftp.login(claves.FTPMulitaUser, claves.FTPMulitaPasswd)
+	ftp.cwd('HD')
+	# Obtenemos la lista de películas pendientes de procesar
+	listaremota = []
+	ftp.retrlines('list *.mkv', callback=listaremota.append)
+	lista = []
+	# Pendiente bajar también las infantiles que no se hayan bajado. Revisar que permisos tienen y como cambiarlos
+	for f in listaremota:
+		if f[0:10] == '-rw-rw-rw-':
+			# Partimos de buscar el primer espacio a partir del campo hora
+			lista.append(f[f.find(' ',53)+1:])
+	lista.sort()
+	for f in lista:
+		print(lista.index(f) + 1, f)
+	# Empezamos a bajarnos las películas
+	for f in lista:
+		if not Queda(f, env.HD, ftp):
+			if Batch:
+				Log('No queda espacio en Z para copiar ' + f)
+				continue
+			else:
+				if input('No queda espacio suficiente en ' + env.HD[0:2] + ', limpia') == 'n':
+						continue
+		with open(f, 'wb') as file:
+			Log('Descargamos ' + f, Debug)
+			if ftp.retrbinary('RETR ' + f, file.write, 10240) == '226 Transfer complete.':
+				# Cambiamos atributos para marcarla como bajada. Pendiente leerlos primero para solo cambiar el primero
+				ftp.sendcmd('SITE CHMOD 766 ' + f)
+	# Pasamos a las Series
+	os.chdir(env.PASADOS)
+	ftp.cwd('/mnt/e/Series/')
+	# Generamos la lista de series que hay
+	os.system('dir /b /ad >ver.txt')
+	lista = ftp.nlst()
+	print(lista)
+	for f in lista:
+		capi = Capitulo(f, ftp)
+		# Si no es una serie o no está en la lista, la movemos a otros y pasamos al siguiente
+		if not capi.Ok:
+			destino = '/mnt/e/otros/'
+			Log('Pasamos ' + f + ' a Otros', Debug)
+			ftp.rename(f, destino + f)
+			continue
+		# Comprobamos si el nombre es correcto y creamos la carpeta en caso necesario
+		capi.Existe(ftp)
+		# Asignamos el destino a PASADOS
+		destino = '/mnt/e/pasados/'
+		# A partir de aquí hemos de usar capi.Todo por si el nombre ha cambiado
+		# Si no es de las que seguimos en el curro
+		if not capi.Vemos():
+			# Cambiamos atributos para marcarla como bajada. Pendiente leerlos primero para solo cambiar el primero
+			ftp.sendcmd('SITE CHMOD 766 ' + capi.Todo)
+			# Lo movemos a su carpeta
+			Log('Movemos ' + capi.Todo + ' a su carpeta', Debug)
+			try:
+				ftp.rename(capi.Todo, destino + capi.Serie + '/' + capi.Todo)
+			except:
+				Log('Ha habido algún problema moviendo ' + capi.Todo + ' a ' + destino + capi.Serie + '/' + capi.Todo, Debug)
+			continue
+		# Si es de alguna serie que nos interesa
+		# Lo descargamos en su carpeta si hay espacio
+		if not Queda(capi.Todo, env.PASADOS, ftp):
+			if input('No queda espacio suficiente en ' + env.PASADOS[0:2] + ', limpia') == 'n':
+				continue
+		os.chdir(capi.Serie)
+		with open(capi.Todo, 'wb') as file:
+			Log('Descargamos ' + capi.Todo, True)
+			if ftp.retrbinary('RETR ' + capi.Todo, file.write, 10240) == '226 Transfer complete.':
+				# Cambiamos atributos para marcarla como bajada. Pendiente leerlos primero para solo cambiar el primero
+				ftp.sendcmd('SITE CHMOD 766 ' + capi.Todo)
+				# Lo movemos a su carpeta
+				Log('Lo movemos a ' + destino + capi.Serie + '/', Debug)
+				ftp.rename(capi.Todo, destino + capi.Serie + '/' + capi.Todo)
+		# Volvemos a la carpeta de pasados
+		os.chdir('..')
+	# Cerramos la conexión
+	ftp.close()
 	return
-def Borra(Liberar = 30, Dias = 30):
+
+def Bomba(Debug = False):
+	""" Desde aquí controlamos el funcionamiento de la bomba.
+	"""
+	import subprocess
+	
+	if type(Debug)==str:
+		Debug = eval(Debug)
+	# Diferencial de temperatura a alcanzar
+	delta = 2
+	# Creamos las instancias
+	bomba = SonoffTH('bomba', Debug)
+	# Si la temperatura actual es mayor de 25º es que ya ha estado en funcionamiento, así que salimos
+	if bomba.Temperatura > 25:
+		Log('La temperatura de la bomba es de ' + str(bomba.Temperatura) + 'º, así que no la activamos', Debug)
+		return
+	placa = SonoffTH('placa', Debug)
+	# Pasamos el valor a una variable para poder finalizar el objeto
+	tplaca = placa.Temperatura
+	# Si el agua no está caliente, activamos la placa. Hay que pasar este valor a la clase
+	TMin = 30
+	if (tplaca < TMin and int(time.strftime('%H')) < 23 and int(time.strftime('%H')) > 6):
+		# Temporalmente, creamos un subproceso para el tema de calentar el agua de la placa sin esperar para poder lanzar la bomba, que es lo que nos interesa. Y lo lanzamos el subproceso redirigiendo la salida y los errores a la misma variable
+		sub = subprocess.Popen(['python3','/home/hector/bin/funciones.py Placa 4'],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+	# Objetivo a alcanzar. En principio, 2 grados más que la actual
+	temperatura = bomba.Temperatura + delta
+	# Aplicamos el nuevo control automático embebido en la clase
+	#bomba.Controla (4, TMax = 35, TMin = 30)
+	# Lo dejamos inutilizado hasta confirmar que el control embebido está funcionando correctamente
+	# Volvemos a activarlo para hacer pruebas de calibración.
+	while (bomba.Estado == 'OF' and bomba.Temperatura < temperatura):
+		# Vamos comprobando la temperatura cada 10 segundos para un total de x segundos y después esperamos
+		for f in range(0, 6):
+			# Activamos la bomba durante x segundos y esperamos 60 más para que llegue el calor al sensor
+			bomba.Controla(1, temperatura, 0, 10)
+			time.sleep(10)
+			if bomba.LeeTemperatura() >= temperatura:
+				break
+		# Después de haber activado la bomba durante x segundos en tramos de 10, esperamos a ver si la temperatura sube
+		for g in range(0, 6):
+			time.sleep(10)
+			if bomba.LeeTemperatura() >= temperatura:
+				break			
+	Log('Despues de ' + str(f*10 + g*10) + ' segundos la temperatura es de ' + str(bomba.Temperatura) + 'º y al comenzar era de ' + str(temperatura -delta) + 'º', True)
+	time.sleep(150)
+	Log('Después de 150 segundos más la temperatura es de ' + str(bomba.LeeTemperatura()) + 'º')
+	if False:
+		# Comprobamos si está desactivada la bomba y que la temperatura es menor del objetivo
+		while (not bomba.Estado == 'ON' and bomba.LeeTemperatura() < temperatura):
+			# Calculamos el tiempo de funcionamiento en base al diferencial de temperatura. Como lo establecemos en 5º vamos a poner 12 segundos por º
+			tiempo = (temperatura - bomba.Temperatura) * 12
+			# La activamos durante el tiempo necesario. No es necesaria la temperatura mínima, que es el segundo parámetro, puesto que lo controlamos manualmente
+			Log('Activamos bomba con una temperatura de ' + str(bomba.Temperatura) + ' durante ' + str(tiempo) + ' segundos', Debug)
+			bomba.Controla(1, temperatura, 0, tiempo)
+			# Debido a la inercia térmica, esperamos un minuto adicional antes de volver a leer la temperatura para dar tiempo a que el calor llegue al sensor
+			time.sleep(tiempo + 60)
+			# La paramos. Ya no es necesario al implementar el parámetro de tiempo con el backlog en la llamada al SonOff
+			# Log('Paramos la bomba ' + str(tiempo) + ' segundos después y esperamos 60 segundos para volver a medir la temperatura', Debug)
+			# bomba.Controla(0)
+		else:
+			# Si está activa la paramos
+			Log('Paramos la bomba. Temp. Inicial: ' + str(temperatura - 5) + 'º y la temperatura final es de ' + str(bomba.Temperatura) + 'º', Debug)
+			if bomba.Estado == 'ON':
+				bomba.Controla(0)
+		time.sleep(300)
+		Log('Temperatura de la bomba 5 minutos después: ' + str(bomba.LeeTemperatura()) + 'º', Debug)
+	return
+
+def Borra(Liberar = 30, Dias = 20, Auto = 0):
 	"""Se encarga de liberar espacio eliminando los ficheros más viejos que hay en las series sin
 	contar los que están en las series que vemos (env.SERIESVER) Por defecto, liberará 20 GB.
+	Añadimos un parámetro Auto para poder lanzarlo de manera automática desde Discolleno cuando 
+	el emule detecta que no hay espacio, de manera que no pregunta nada.
 	"""
 	Log('Vamos a proceder a eliminar ficheros viejos de pasados')
 	# Sacamos la lista de ficheros con mas de 30 días de antiguedad y que los permisos 
@@ -136,23 +559,24 @@ def Borra(Liberar = 30, Dias = 30):
 	#Convertimos a entero el parámetro pasado en caso de que viniera como string
 	if type(Liberar) is str:
 	    Liberar = int(Liberar)
-	#Quitamos las series que estamos viendo
+	#Quitamos las series que estamos viendo. Añadimos el .upper() por si ha camabiado la mayúscula/minúscula en algún momento
 	for l in lista:
 		No = 0
 		for v in ver:
-			if v == l[0:l.find('/')]:
+			if v.upper() == l[0:l.find('/')].upper():
 				No = 1
 				break
 		if not No:
 			borrar.append(l)
 	libre = Borra2(borrar, Liberar)
 	# Si no hemos conseguido liberar el espacio solicitado pasamos a las series ya vistas
-	if Liberar > libre:
+	if (Liberar > libre and Auto == 0):
 		BorraVistos(Liberar)
 	else:
 		os.system("/home/hector/bin/compartidos")
 	# Eliminamos las carpetas sin serie
-	LimpiaPasados()
+	if Auto == 0:
+		LimpiaPasados()
 	return
 
 def Borra2(borrar, Liberar, Preg=False):
@@ -173,7 +597,7 @@ def Borra2(borrar, Liberar, Preg=False):
 		if not per.st_mode & stat.S_IXUSR:
 			# Preguntamos si se quieren borrar 
 			if Preg:
-				que = input('¿Borramos ' + f + '? (No / Todos)').upper() 
+				que = input('¿Borramos ' + f + '? (N)o / (T)odos: ').upper() 
 				if que == 'N':
 					continue
 				if que == 'T':
@@ -187,12 +611,22 @@ def Borra2(borrar, Liberar, Preg=False):
 	return libre
 
 def BorraVistos(Liberar = 30):
+	""" Se encarga de hacer una lista con los ficheros que se han visto de 'pasados' para luego poder proceder a borrarlos.
+		La TV Samsung modifica un campo bookmark para poder recordar por donde íbamos, que marca los segundos transcurridos desde el inicio
+		o en caso de que se haya visto hasta el final, pone un 0 en dicho Bookmark. Esto nos crea un pequeño conflicto, ya que en algunas ocasiones
+		empezamos a ver el siguiente capítulo al actual 'sin querer', y eso puede ocasionar que el bookmark se quede a 0 y la función asuma
+		que ya se ha visto. No veo fácil solución, a parte de que en caso de que ocurra darle un poco para adelante de manera que nos aseguremos 
+		que no se queda a 0
+	"""
 	# Obtenemos el listado de ficheros con bookmarks y con su duración
-	if type(Liberar) is str:
-		Liberar = float(Liberar)
+	Liberar = float(Liberar)
 	lista = os.popen('sqlite3 /mnt/e/.mini/files.db "select path,sec,duration from bookmarks inner join details on bookmarks.id=details.id where path like \'/mnt/e/pasados/%\' order by path;"').read()
 	lista = list(filter(None, lista.split('\n')))
 	borrar = []
+	# Hacemos un backup de los bookmarks
+	with open(env.LOG[:-9] + 'Bookmarks.bak', 'w') as file:
+		for f in lista:
+			file.write(f + '\n')
 	# Seleccionamos los que han sido vistos más de un 95% o tiene un 0 que indica que se han visto completamente o que apenas se han empezado a ver
 	for f in lista:
 		ruta, bookmark, duracion = f.split('|')
@@ -205,7 +639,7 @@ def BorraVistos(Liberar = 30):
 		for f in range(len(borrar)):
 			print('{0:2d} '.format(f) + borrar[f])
 		# Preguntamos si realmente los queremos borrar
-		que = input('Procedemos?').upper()
+		que = input('Procedemos? (N)o / Nº: ').upper()
 		if que == 'N':
 			return
 		if que.isnumeric():
@@ -214,7 +648,7 @@ def BorraVistos(Liberar = 30):
 		# Actualizamos en el aMule la lista de ficheros compartidos
 		os.system("/home/hector/bin/compartidos")
 	return
-
+	
 def BP(Peli, Comentario):
 	""" Se encarga de eliminar una peli y dejar un comentario en Borradas_HD para no volver a caer en el error de bajarla
 	"""
@@ -233,19 +667,35 @@ def BP(Peli, Comentario):
 	return
 
 def Copia():
-	"""Se encarga de realizar una copia del contenido de ~/bin y /mnt/e/util modificado desde ayer al ftp del cine
+	"""Se encarga de realizar una copia del contenido de varias carpetas modificado desde ayer al ftp de Movelcan
 	"""
-	#Nos vamos a la carpeta bin
-	os.chdir('/home/hector/bin')
-	os.system('find . -maxdepth 1 -type f -mtime -1 -exec curl --ftp-pasv -T {} ftp://hrr:21ceLeborn@ftp.ono.com/bin/ \;')
-	#Nos vamos a la carpeta util
-	os.chdir('/mnt/e/util')
-	os.system('find . -maxdepth 1 -type f -mtime -1 -exec curl --ftp-pasv -T {} ftp://hrr:21ceLeborn@ftp.ono.com/util/ \;')
-	#Método alternativo desde dentro de Python
-	#Nos conectamos
-	#ftp = FTP('cine.no-ip.info', user='u820276474', password='22celEborn')
-	#Nos cambiamos a la carpeta de destino
-	#ftp.cwd('bin')
+	from ftplib import FTP
+	import claves
+	
+	# Designamos las carpetas que copiar
+	rutas = ['/home/hector/bin', '/mnt/e/util', '/mnt/f/scripts', '/mnt/e/.mini']
+	# Abrimos la conexión FTP
+	ftp = FTP()
+	ftp.connect('files.000webhost.com', 21)
+	# Cambiamos encoding a utf8 para que se respeten los acentos
+	ftp.encoding='utf-8'
+	ftp.login(claves.FTPMovelcanUser, claves.FTPMovelcanPasswd)
+	ftp.cwd('Copias')
+	for f in rutas:
+		os.chdir(f)
+		# Obtenemos le nombre de la carpeta que será el del zip
+		carpeta = f[f.rfind('/') + 1:] + '.zip'
+		# Generamos el zip en /tmp con los ficheros modificados en el último día
+		os.system('find . -maxdepth 1 -type f -mtime -1 -exec zip /tmp/' + carpeta + ' {} \;')
+		# Si hay algo que copiar lo subimos por FTP a la carpeta del día en curso
+		if os.path.exists('/tmp/' + carpeta):
+			ftp.cwd(time.strftime('%a'))
+			with open('/tmp/' + carpeta, 'rb') as fichero:
+				Log('Copia de ' + f + ': ' + ftp.storbinary('STOR ' + carpeta, fichero).replace('\n', '. '), True)
+			ftp.cwd('..')
+			# Una vez transferido, lo eliminamos. Falta hacer un chequeo para comprobar que se ha subido correctamente
+			os.remove('/tmp/' + carpeta)
+	ftp.close()
 	return
 
 def CopiaNuevas(Pen):
@@ -356,7 +806,7 @@ def CreaWeb(p1 = 'Ultimas', Pocas = 0):
 		if not os.path.exists(env.TMP + p1):
 			# Creamos el fichero con las pelis o series a incluir en la página
 			if p1 == 'Todas':
-				os.system('cat ' + env.PLANTILLAS + 'HD*>' + env.TMP + 'Todas')
+				os.system('cat ' + env.PLANTILLAS + 'HD* >' + env.TMP + 'Todas')
 			else:
 				if p1 == 'Series':
 					deque = 'Series_*'
@@ -433,12 +883,12 @@ def CreaWeb(p1 = 'Ultimas', Pocas = 0):
 			termina = '</a>'
 		else:
 			mfaltan.append(peli)
-		# Suprimimos la búsqueda del trailer en las Series ya que no lo solemos poner
-		if not ser=='s':
+		# Modificamos para no buscar el trailer en las series, ya que la mayoría no tienen y solo generamos basura en el log
+		if ser != 's':
 			trai = Trailer(peli)
-		# Añadimos un \n para que sea más fácil localizarlo desde el curro para anunciar las pelis
-		if len(trai) > 0:
-			trai = '\n <a href="' + trai + '" target="_trailer">[T]</a>\n'
+			# Añadimos un \n para que sea más fácil localizarlo desde el curro para anunciar las pelis
+			if len(trai) > 0:
+				trai = '\n <a href="' + trai + '" target="_trailer">[T]</a>\n'
 		else:
 			trai = ''
 			tfaltan.append(peli)
@@ -485,6 +935,27 @@ def CreaWeb(p1 = 'Ultimas', Pocas = 0):
 	# Eliminamos el fichero usado para crear la página excepto cuando son las últimas, que no se genera fichero
 	if not p1 == 'Ultimas':
 		os.system(env.DEL + env.TMP + p1)
+	return
+
+def Discolleno():
+	"""Es lanzada cuando el emule detecta que queda 1 GB o menos libre.
+	Se encargará de hacer una primera limpieza, y en caso de que no sea suficiente, mandar un mensaje avisando del problema
+	"""
+	#Si ya hemos mandado el mensaje e intentado limpiar en esta hora, ignoramos el proceso, puesto que el emule lo lanza cada minuto
+	hora = time.strftime('%Y%m%d%H')
+	if os.path.exists('/tmp/' + hora):
+		return
+	else:
+		#Si hemos creado un fichero la hora antes, lo eliminamos
+		if os.path.exists('/tmp/' + str(int(hora) -1 )):
+			os.remove('/tmp/' + str(int(hora) -1 ))
+	#Primero lanzamos la función de borrar de manera automática que debería de dejar 20 GB libres
+	Borra(Auto = 1)
+	libre = Libre('/mnt/e/')
+	if libre > 5:
+		return
+	#Si no hemos alcanzado los 5 GB y no lo hemos hecho ya, mandamos un correo
+	os.system('df -h /mnt/e | mutt -s "Disco de la PiMulita sin espacio" -c Hector.D.Rguez@gmail.com &>>/tmp/' + hora)
 	return
 
 def Divide(Serie):
@@ -550,13 +1021,19 @@ def GeneraLista(Listado, Pelis, Serie = False):
 			file.write(f + ':' + Listado + ':' + comen + capis + '\n')
 	return
 
-def GuardaHD():
+def GuardaHD(Disco = ''):
 	""" Se encarga de pasar las películas a los discos externos USB para su almacenamiento
 		Empezaremos solo por las pelis por ser más sencillo su tratamiento. Tenemos que tener 
 		montado el disco en la ruta anterior a la que señala la variable HDG (/mnt/HD)
 		El parámetro Etiq es el que se va a pasar a la función ListaPelis para almcenar la lista 
 		actualizada de películas.
+		Pasamos como parámetro la etiqueta del disco a montar
 	"""
+	if not (os.path.exists(env.HD + 'Pelis') or os.path.exists(env.HD + 'Infantiles')) and not Disco == '':
+		# Si devuelve 0 (False) es que todo ha ido bien. Si es mayor que 0 (True)
+		if os.system('sudo mount /dev/disk/by-label/' + Disco + ' /mnt/HD'):
+			print('No podemos montar el disco ' + Disco + ' en /mnt/HD o no tiene una carpeta "Pelis"')
+			exit()
 	Log('Comenzamos la copia de pelis HD', True)
 	# Nos vamos a la carpeta de las pelis
 	os.chdir(env.HD)
@@ -573,7 +1050,7 @@ def GuardaHD():
 	LimpiaHD()
 	Etiq = GuardaLibre(env.HDG)
 	# Paramos el disco duro por si lo hemos dejado copiando. El parámetro -Sx establece en x*5 segundos el tiempo de inactividad antes de pararse
-	os.system('cd &&sleep 3&&sudo hdparm -S3 /dev/disk/by-label/' + Etiq + ' &&sudo umount /mnt/HD')
+	os.system('sync &&cd &&sudo umount /mnt/HD &&sudo hdparm -y /dev/disk/by-label/HD-TB-8-1')
 	return
 
 def GuardaLibre(Ruta):
@@ -586,10 +1063,12 @@ def GuardaLibre(Ruta):
 	lista = [x[:-1] for x in lista]
 	# Obtenemos el espacio libre
 	libre = Libre(Ruta)
+	# Obtenemos el espacio total
+	total = Total(Ruta)
 	# Obtenemos la etiqueta 
 	Etiq = Etiqueta(Ruta[:-1])
 	# Formamos la línea a escribir
-	linea = Etiq + ' = ' + '{:,g}'.format(libre) + ' GB'
+	linea = Etiq + ' = ' + '{:,g}'.format(libre) + ' GB, ' + '{:,g}'.format(total) + ' TB'
 	# Buscamos la etiqueta de nuestro disco y ponemos el nuevo espacio libre. Devuelve una lista de un elemento
 	vieja = [x for x in lista if x.startswith(Etiq)]
 	# Por si no estaba, buscamos la línea y si no está, la añadimos
@@ -644,7 +1123,7 @@ def GuardaPelis(Cuales, Que):
 		os.chmod(peli, per.st_mode | stat.S_IRWXG | stat.S_IRWXO)
 		Log('Se ha copiado la película ' + peli)
 	Log('Hemos terminado de copiar las pelis HD', True)
-	os.system('/home/hector/bin/ledonoff none')
+	#os.system('/home/hector/bin/ledonoff none')
 	return
 
 def GuardaSeries(Ruta, deb = False):
@@ -654,10 +1133,10 @@ def GuardaSeries(Ruta, deb = False):
 	"""
 	lista = []
 	Log('Comenzamos la copia de las Series ' + Ruta, True)
-	# Confirmamos que está montado el disco de destino, y si no, lo montamos
+	# Confirmamos que está montado el disco de destino, y si no, lo montamos usando el by-label por los problemas con el Stretch y el fstab
 	while not os.path.exists(env.SERIESG + Ruta + '/Series/'):
-			os.system('sudo mount ' + env.SERIESG + Ruta)
-			time.sleep(3)
+			os.system('sudo mount /dev/disk/by-label/Series_' + Ruta[0] +'-' + Ruta[1] + ' ' + env.SERIESG + Ruta)
+			#time.sleep(1)
 	# Encendemos el led verde para mostrar que estamos copiando
 	os.system('/home/hector/bin/ledonoff heartbeat')
 	# Nos vamos a la carpeta de las Series
@@ -712,15 +1191,19 @@ def GuardaSeries(Ruta, deb = False):
 			print('cambiamos permisos a ' + serie)
 		else:
 			os.chmod(serie,0o644)
+			# También los cambiamos en el disco de destino para en el caso de recuperarlos para verlos no aparezcan como pendientes de copiar de nuevo
+			os.chmod(env.SERIESG + Ruta + '/Series/' + serie,0o644)
 		# Log('Se ha copiado la serie ' + serie, True)
 	Log('Hemos terminado de copiar las series', True)
 	GuardaLibre(env.SERIESG + Ruta + '/')
 	ListaSeries(Ruta)
 	CreaWeb('Series')
 	# Desmontamos la unidad
-	os.system('sudo umount ' + env.SERIESG + Ruta)
+	os.system('sync &&sudo umount ' + env.SERIESG + Ruta)
+	# Dormimos la unidad
+	os.system('sudo hdparm -y /dev/disk/by-label/Series_' + Ruta[0] +'-' + Ruta[1])
 	# Apagamos el led
-	os.system('/home/hector/bin/ledonoff none')
+	# os.system('/home/hector/bin/ledonoff none')
 	return
 
 def JTrailer(Peli, Debug = 0):
@@ -755,7 +1238,9 @@ def JTrailer(Peli, Debug = 0):
 		trailer = pp[qq.index(Peli)]
 	except ValueError as e:
 		print('No se encuentra la peli: ' + Peli + '.\nQuizás problemas con acentos o ñ')
-		trailer = ''
+		trailer = 'No hay trailer'
+	if trailer == '':
+		trailer = 'No hay trailer'
 	return trailer
 
 def Led():
@@ -777,7 +1262,8 @@ def Led():
 	return exit
 
 def Libre(p1, Tam = 'G'):
-	#Obtenemos el espacio libre en disco, por defecto, en GB
+	""" Obtenemos el espacio libre en disco, por defecto, en GB
+	"""
 	if Tam == 'M':
 		Tam = 1024 * 1024
 	else:
@@ -788,14 +1274,16 @@ def Libre(p1, Tam = 'G'):
 		sys = wmi.WMI()
 		for f in sys.Win32_LogicalDisk():
 			if f.Caption == p1[0:2].upper():
-				libre = int(f.FreeSpace) / Tam
+				libre = round(int(f.FreeSpace) / Tam, 3)
 				break
 	else:
 		disco = os.statvfs(p1)
-		libre = (disco.f_frsize * disco.f_bavail) / Tam
+		libre = round((disco.f_frsize * disco.f_bavail) / Tam, 3)
 	return libre
 
 def Limpia(f):
+	""" Se encarga de limpiar el nombre de los ficheros descargados para eliminar todo lo posterior al primer '['
+	"""
 	donde = f.find('[')
 	if (donde >= 0 and (f[-3:] == 'avi' or f[-3:] == 'mkv' or f[-3:] == 'srt')):
 		#Si hay un espacio antes del corchete también lo eliminamos
@@ -819,12 +1307,11 @@ def LimpiaHD():
 	lista = glob.glob('*.jpg')
 	for f in lista:
 		if not os.path.exists(f[:-3] + 'mkv'):
-			print('Borramos ' + f)
-			os.remove(f)
-	lista = glob.glob('*.tmp')
-	for f in lista:
-		print('Borramos ' + f)
-		os.remove(f)
+			# Hacemos una lista con los ficheros a borrar por si hay además algún .tmp o .srt
+			borra = glob.glob(f[:-3] + '*')
+			for g in borra:
+				print('Borramos ' + g)
+				os.remove(g)
 	return
 
 def LimpiaPasados():
@@ -849,6 +1336,111 @@ def LimpiaPasados():
 				shutil.rmtree(f)
 	return
 
+def LimpiaPuntos(Mascara, Parent = '('):
+	""" Se encarga de limpiar el nombre de los ficheros descargados para eliminar '.' entre palabra y palabra y a partir del primer '(' o
+	cadena pasada como segundo parámetro, para los casos donde no haya un paréntesis sinque la coletilla empiece de otra manera
+	"""
+	import glob
+	# Cargamos la lista de ficheros que coinciden con la máscara
+	sinparent = ''
+	lista = glob.glob(Mascara)
+	for f in lista:
+		donde = f.find(Parent)
+		if (donde >= 0 and (f[-3:] == 'avi' or f[-3:] == 'mkv' or f[-3:] == 'srt')):
+			#Si hay un punto o espacio antes del paréntesis o principio de la coletilla también lo eliminamos
+			if f[donde-1] == '.' or f[donde-1] == ' ':
+				donde -= 1
+			# Nos quedamos con lo que hay hasta justo antes del paréntesis o principio de la coletilla 
+			sinparent = f[0:donde]
+		else:
+			# Si no, nos quedamos con todo menos la extensión, asumiendo que ésta es de solo 3 caracteres
+			sinparent = f[:-4]
+		# Cambiamos los '.' por ' ' y añadimos la extensión
+		sinparent = sinparent.replace('.', ' ') + f[-4:]
+		# Renombramos
+		try:
+			os.rename(f,sinparent)
+		except OSError as e:
+			print('Ha ocurrido un error renombrando el fichero ' + f + ': ' + e.strerror)
+			return f
+		print('Limpiamos el nombre del fichero %s a %s' % (f, sinparent))
+	f = sinparent
+	return f
+
+def ListaCapitulos2(Serie, Ruta):
+	""" Se encarga de revisar los capítulos de una serie dada para sacar un resumen de los mismos y 
+	detectar si faltan capítulos en alguna temporada o están repetidos.
+	
+	Para que esta función funcione correctamente será necesario asegurarse de que la nomenclatura de
+	los capítulos es homogénea, y no tenemos mezcla de mayúsculas o minúsculas así como otras alteraciones
+	
+	Esta es una segunda versión usando el Objeto Capitulo que aún está pendiente de desarrollar correctamente.
+	Mos quedamos con problemas para tratar los capítulos dobles, por ejemplo en Babylon Berlin que además se trata del primero
+	"""
+	import glob
+	if env.SISTEMA == 'Windows':
+		env.SERIESG = ''
+		
+	os.chdir(env.SERIESG + Ruta + Serie)
+	# Leemos todos los capítulos
+	lista = glob.glob('*.avi')
+	lista.extend(glob.glob('*.mkv'))
+	lista.sort
+	donde = len(Serie) + 1
+	# Convertimos en objeto y lo metemos en una lista
+	serie = []
+	for f in lista:
+		serie.append(Capitulo(f))
+	# Ahora toca recorrer la lista separando temporadas, quedándonos con el primer y último capítulo
+	# y también informar si nos saltamos alguno
+	# cogemos la información de la primera temporada y el primer capítulo almacenado
+	tem = serie[0].Temp
+	# Metemos en una lista los números de los capítulos para mostrarlos en pantalla y poder depurar
+	capis = []
+	for f in serie:
+		capis.append(f.Capi)
+	print(capis, Serie)
+	# Le restamos 1 al capítulo para que haya una secuencia válida. No empezamos por 0 puesto que hay series
+	# que parte están grabadas en CD, no en disco duro
+	if len(serie[0].Capi) > 2:
+		capi = int(serie[0].Capi[-2:]) - 1
+	else:
+		capi = int(serie[0].Capi) - 1
+	resumen = serie[0].Serie + ' - '
+	saltados = ''
+	for f in serie:
+		# Si hemos cambiado de temporada
+		if not tem == f.Temp:
+			# Ponemos en el resumen el capítulo final de la temporada anterior y el primero de la actual
+			resumen = resumen + '{0:02d} '.format(capi) + ', ' + f.Capi + ' - '
+			tem = f.Temp
+			capi = 0
+			if int(f.Capi) == 0:
+				capi = -1
+		# Chequeamos si es un capítulo doble y añadimos 1 a la suma para que no nos de como que falta 
+		# el primero de los dos, puesto que solo chequea los dos últimos carcteres de la cadena
+		if f.Capi.find('-') > 0:
+			capi = capi + 1
+		# Si nos hemos saltado un capítulo
+		if not int(f.Capi) == capi + 1:
+			# Si está repetido
+			if int(f.Capi) == capi:
+				Log('Capítulo ' + tem + 'x' + str(capi) + ' de la serie %s repetido' % Serie, True)
+				continue
+			# Entonces, falta, así que lo añadimos a la lista, pero hay que comprobar si hay más seguidos que faltan
+			# y hay que ponernos un límite de 24 para no seguir hasta el infinito
+			for x in range(capi + 1, 24):
+				if not int(f.Capi) == x:
+					saltados = saltados + tem + 'x{0:02d}, '.format(x)
+				else:
+					break
+		capi = int(f.Capi)
+	resumen = resumen + '{0:02d} '.format(capi)
+	if len(saltados) > 0:
+		resumen = resumen + '. Faltan= ' + saltados
+		Log('Capítulos que faltan en ' + Serie + ': ' + saltados, True)
+	return resumen
+
 def ListaCapitulos(Serie, Ruta):
 	""" Se encarga de revisar los capítulos de una serie dada para sacar un resumen de los mismos y 
 	detectar si faltan capítulos en alguna temporada o están repetidos.
@@ -864,6 +1456,7 @@ def ListaCapitulos(Serie, Ruta):
 	# Leemos todos los capítulos
 	lista = glob.glob('*.avi')
 	lista.extend(glob.glob('*.mkv'))
+	lista.extend(glob.glob('*.mp4'))
 	lista.sort
 	donde = len(Serie) + 1
 	# Primero separamos la serie del capítulo para poder quedarnos solo con la temporada y el capítulo
@@ -908,7 +1501,7 @@ def ListaCapitulos(Serie, Ruta):
 				if not int(f[-2:]) == x:
 					saltados = saltados + tem + 'x{0:02d}, '.format(x)
 				else:
-						break
+					break
 		capi = int(f[-2:])
 	resumen = resumen + '{0:02d} '.format(capi)
 	if len(saltados) > 0:
@@ -978,7 +1571,10 @@ def ListaSeries(Ruta=''):
 	return
 	
 def Log(p1, imp = False, fallo = ''):
-	"""Función para escribir en el log del sistema de multia
+	"""Función para escribir en el log del sistema de mulita
+	p1 es el mensaje a escribir
+	imp si es verdadero lo imprimimos en panatala además de ponerlo en el log
+	fallo mostraría la rutina que dio origen al mensaje. Faltaría automatizarlo.
 	"""
 	escri = time.strftime('%d/%m/%Y %H:%M:%S') + ' ' + fallo + p1 + '\n'
 	with open(env.LOG, 'a') as fichero:
@@ -987,6 +1583,17 @@ def Log(p1, imp = False, fallo = ''):
 		print(escri)
 	return
 
+def MandaCurl(URL):
+	import pycurl
+	from io import BytesIO
+	buffer = BytesIO()
+	c = pycurl.Curl()
+	c.setopt(c.URL, URL)
+	c.setopt(c.WRITEDATA, buffer)
+	c.perform()
+	c.close()
+	return buffer.getvalue().decode()
+	
 def ObtenLista(Ulti = 0):
 	""" Mini función para obtener las películas de una carpeta determinada.
 	"""
@@ -1017,24 +1624,139 @@ def Para():
 	for f in (range(1,len(sys.argv))):
 		print(str(f) + ': ' + sys.argv[f])
 
-def Prueba(Capi):
+def PasaaBD(Fichero = '/var/log/placa.log'):
+	""" Esta función pasa a una Base de Datos en sqlite3 la información de la placa solar y la bomba obtenida a través del MQTT
+	y volcada en /var/log/placa.log. Una vez renombramos el fichero, pasamos los datos, y los archivamos en un zip.
+	Nos falta también almacenar los de la Bomba, si es que nos interesa de alguna manera.
+	"""
+	import sqlite3
+	
+	# Confirmamos que existe el fichero placa.log
+	if not os.path.exists(Fichero):
+		Log('No hay nada que importar de la placa')
+		return
+	# Nos vamos a la carpeta donde almacenaremos los logs
+	os.chdir('/mnt/e/.mini/')
+	esotro = False
+	con = sqlite3.connect('placa.db')
+	cursor = con.cursor()
+	# Creamos las tablas sólo la primera vez
+	# cursor.execute('''Create TABLE Placa (Fecha	Char(19)	Primary Key Not Null, Temperatura	Real	Not Null, Encendido	Int	Not Null)''')
+	# cursor.execute('''Create TABLE Bomba (Fecha	Char(19)	Primary Key Not Null, Temperatura	Real	Not Null, Encendido	Int	Not Null)''')
+	if Fichero == '/var/log/placa.log':
+		# Renombramos el log para no recibir más datos durante el proceso y cambiamos los permisos
+		os.system('sudo mv ' + Fichero + ' placa_' + time.strftime('%H%M') + '.log && sudo chmod 777 placa_' + time.strftime('%H%M') + '.log')
+		# Cambiamos la variable para que apunte al fichero renombrado
+		Fichero = 'placa_' + time.strftime('%H%M') + '.log'
+	else:
+		esotro = True
+	# Cargamos los datos de la placa. Idealmente, deberíamos hacer la criba nosotros y no a través del grep
+	Datos = list(filter(None,os.popen('grep -v STATUS10 ' + Fichero + ' | grep -v /POWER | grep -v bomba|grep -v UPTIME|grep -v RESULT').read().split('\n')))
+	Encendido = -1
+	Temperatura = 0.0
+	contador = 0
+	#Log('Comenzamos la importación de datos de la Placa a la BD en sqlite3 con el primer dato: ' + Datos[0][0:15])
+	for f in Datos:
+		try:
+			mensaje = eval(f[f.index('{'):])
+		except:
+			continue
+		if 'DS18B20' in mensaje:
+			Temperatura = float(mensaje['DS18B20']['Temperature'])
+		if 'POWER' in mensaje:
+			Fecha = mensaje['Time'].replace('T',' ')
+			if mensaje['POWER'] == 'ON':
+				Encendido = 1
+			else:
+				Encendido = 0
+		# Si ya tenemos ambos datos, pasamos al siguiente
+		if not Temperatura == 0 and not Encendido == -1:
+			print(Fecha, Temperatura, Encendido)
+			cursor.execute("INSERT INTO Placa (Fecha, Temperatura, Encendido) VALUES ('" + Fecha + "', " + str(Temperatura) + ", " + str(Encendido) + ")")
+			Temperatura = 0
+			Encendido = -1
+			contador += 1
+	con.commit()
+	con.close()
+	# Añadimos el log horario al del día
+	if not esotro:
+		os.system('cat ' + Fichero + ' >> placa_' + time.strftime('%Y%m%d') + '.log && rm ' + Fichero)
+	# Si es el último de la noche, lo movemos al zip de los logs 
+	if time.strftime('%H') == '23':
+		os.system('zip -m logs.zip placa_' + time.strftime('%Y%m%d') + '.log')
+		Log('Terminamos por hoy la importación de datos del log de la Placa a la BD con el ' + f[0:15] + '  y hemos importado ' + str(contador) + ' valores y comprimido el log')
+
+def Placa(Quehacemos = 4, Tiempo = 0):
+	""" Función encargada de controlar el SonOff de la placa a través de MQTT.
+	Si Quehacemos: 0 Paramos la placa
+				   1 Activamos la placa
+				   2 Estamos controlando la placa de manera automática (Las consignas de temperatura están establecidas por defecto en la clase)
+				   Otro solo consultamos temperatura
+	En caso de solo querer apagarla vamos a prescindir del MQTT e ir directamente usando el curl
+	"""
+	# Cambiamos el tipo del parámetro por si lo hemos llamado desde línea de comando y nos llega como string
+	Quehacemos = int(Quehacemos)
+	# Inicializamos temp por si nos despistamos antes de hacer el return
+	temp = 0
+	# Si solo queremos apagar, mandamos el comando por curl y evitamos la inicialización de la clase
+	if Quehacemos == 0:
+		return MandaCurl('http://192.168.1.9/cm?cmnd=Power%20Off')
+	# Creamos la instancia de la bomba
+	bomba = SonoffTH('bomba', True)
+	# Activamos la bomba 10 segundos para que el agua llegue a la sonda en la tubería y la caliente
+	bomba.Controla(1, Tiempo = 10)
+	# Esperamos 30 segundos para que coja temperatura el sensor
+	time.sleep(30)
+	# Creamos la instancia de la placa
+	placa = SonoffTH('placa', True)
+	if (placa.LeeTemperatura() > 30 and Quehacemos == 4):
+		Log('La temperatura del agua está a ' + str(placa.Temperatura) + 'º, por lo que no la activamos', True)
+	else:
+		# En caso de control sencillo, como ya está programado en la clase lo pasamos directamente
+		placa.Controla(Quehacemos, Tiempo)
+		# Si solo queremos la temperatura o aunque no la queramos, la devolvemos
+		temp = placa.Temperatura
+	return temp
+
+def Prueba(Param):
 	""" Para probar funciones que estamos desarrollando
 	"""
-	pp = Capitulo(Capi)
-	print(pp.Existe())
+	# Para copiar ficheros con nombres extraños por culpa de acentos y codigo de página erróneos basándonos en la salida en csv del Teracopy
+	import glob
+	file = open('c:\\users\\hector\\AppData\\Roaming\\TeraCopy\\Reports\\2018.09.11_10-48-56.csv', encoding='iso-8859-1')
+	lista = []
+	for line in file:
+		pp = line.split(',')[2]
+		pp = pp[pp.find('\\') + 1:]
+		lista.append(pp)
+	file.close()
+	lista.remove('Filename')
+	for f in lista:
+		print('Procesando ' + f)
+		capi = Capitulo(f)
+		nuevo = glob.glob('p:\\Series\\' + capi.Serie + '\\' + capi.Serie + ' ' + capi.Temp + 'x' + capi.Capi + '*')
+		#nuevo = input('El nombre actual es: ' + capi.Titulo + ' :')
+		print('Copiando ' + nuevo[0] + ' en ' + 'f:\\Series\\' + capi.Serie + '\\')
+		shutil.copy(nuevo[0], 'f:\\Series\\' + capi.Serie + '\\')
+	#print(type(Param)==str, int(Param))
+	#print(pp.Temp, pp.Estado)
 	return
 
-def Queda(Fichero, Destino):
+def Queda(Fichero, Destino, FTP = False):
 	""" Función para comprobar, antes de copiar, si queda espacio suficiente en la carpeta de destino
 	"""
 	libre =  Libre(Destino, 'M')
-	if (os.path.getsize(Fichero)/(1024 * 1024.0)) > libre:
-		Log('No queda espacio en ' + Destino +' para ' + Fichero, True)
+	if FTP:
+		tamaño = FTP.size(Fichero)
+	else:
+		tamaño = os.path.getsize(Fichero)
+	if (tamaño / (1024 * 1024.0)) > libre:
+		Log('No queda espacio en ' + Destino +' para ' + Fichero + ', ' + str(tamaño), True)
 		return False
 	return True
 
 def ReiniciaDLNA():
-	""" Función para reiniciar el MiniDLNA en caso de ficheros corruptos pero manteniendo los bookmarks de los ficheros exitentes
+	""" *En OBRAS* Función para reiniciar el MiniDLNA en caso de ficheros corruptos pero manteniendo los bookmarks de los ficheros exitentes
 	También aprovecharemos para reiniciar el art_cache
 	"""
 	import sqlite3
@@ -1145,6 +1867,16 @@ def RenSerie(P1, P2, Ruta = env.PASADOS, Todo = 0):
 	Renombra(P1, P2)
 	return
 
+def SacaSubs(P1):
+	""" Función encargada de extraer los subtítulos forzados de un fichero mkv para poder verlos en la TV del Salón
+	La creamos a raiz de series como Star Trek Discovery.
+	Empezaremos por adaptarla solo a ésta, que los subtítulos siempre están en la pista 3 (0: vídeo, 1 y 2 audios)
+	pero la idea es hacerla más genérica y que pueda detectar el flag de forzado de manera automática.
+	"""
+	
+	error = os.system('mkvextract tracks "' + P1 + '" 3:"' + P1[:-3] + 'srt"')
+	return error
+
 def SubCanciones(p1):
 	""" Se encarga de suprimir de un fichero de subtítulos todas las líneas de texto excepto las que pertenecen a canciones (#...#)
 	Nos falta tratar las líneas mixtas, que contienen texto normal y letros de canciones
@@ -1176,6 +1908,92 @@ def SubCanciones(p1):
 	# Guardamos añadiendo el sufijo .for
 	lista.save(p1[:-3] + 'for.srt', encoding='iso-8859-1')
 	return
+
+def Temperatura(Cada = 2, Cual = 'Temperatura'):
+	""" Se encarga de crear una gráfica con la temperatura del agua en la placa solar de las últimas 24h y la última hora
+	"""
+	import sqlite3, datetime
+	# Importamos los últimos datos a la BD
+	PasaaBD()
+	# Cargamos los datos excluyendo los de la Bomba, por ahora
+	bd = sqlite3.connect('/mnt/e/.mini/placa.db')
+	cursor = bd.cursor()
+	# Obtenemos la fecha de ayer para sacar los de las últimas 24 horas
+	fecha = datetime.datetime.now()
+	# Obtenemos cuantos minutso ha estado encedida la placa este mes
+	Activo = list(cursor.execute("select count(Encendido) from placa where encendido=1 and fecha>'" + str(fecha.year) + "-" + str(fecha.month) + "-00'"))[0][0]
+	fecha = fecha - datetime.timedelta(days = 1, minutes = 10)
+	datos = cursor.execute("Select * From placa Where Fecha > '" + fecha.strftime('%Y-%m-%d %H:%M') + "'")
+	Temperatura_CreaWeb(datos, Cada, Cual, Activo)
+	# Ahora obtenemos los datos de la última hora, dando un margen de 10 minutos
+	fecha = datetime.datetime.now() - datetime.timedelta(hours = 1, minutes = 10)
+	datos = cursor.execute("Select * From placa Where Fecha > '" + fecha.strftime('%Y-%m-%d %H:%M') + "'")
+	Temperatura_CreaWeb(datos, 1, 'TemperaturaH', Activo)
+	# Cerramos la base de datos
+	bd.close()
+	#Log('Generamos  la página de curva de temperatura')
+	return
+
+def Temperatura_CreaWeb(Datos, Cada = 2, Cual = 'Temperatura', Activo = 0):
+	""" Separamos la parte encargada de generar la página web para poder llamarla varias veces de cara a crear las páginas 
+	que necesitemos. Por ahora, solo hacemos la de las últimas 24h y la última hora, pero más adelante esperamos poder generarlas
+	a petición desde la web.
+	"""
+	# Cargamos la plantilla
+	with open(env.PLANTILLAS + 'Canvas.1') as file:
+		planti = file.read().split('\n')
+	planti[18] = ' ' * 28 + "xLabel: 'Cada " + str(int(Cada) * 5) + " minutos',"
+	# Abrimos la pagina web
+	with open(env.WEB + Cual + '.html', 'w') as file:
+		# Copiamos las primeras líneas antes de los datos
+		for f in range(0,25,1):
+			file.writelines(planti[f] + '\n')
+		# Pasamos el valor de los minutos que ha estado activa la placa este mes
+		file.writelines(' ' * 28 + 'conectada: ' + str(Activo * 5) + ',\n')
+		# Escribimos el comienzo de los datos
+		file.writelines(' ' * 28 + 'dataPoints: [')
+		cont = 0
+		escribir = []
+		espacios = 40
+		for f in Datos:
+			# Para dejar el html bien identado
+			if len(escribir) == 0:
+				espacios = 0
+			else:
+				espacios = 40
+			# Cogemos solo una de 'Cada' lecturas
+			if cont == int(Cada):
+				cont = 0
+				escribir.append(' ' * espacios + "{ x: '" + f[0][11:16] + "', y: " + str(f[1]) +", z: " + str(f[2]) + " },\n")
+			cont += 1
+		escribir[len(escribir) - 1] = escribir[len(escribir) - 1][0:-2] + "]\n"
+		# Pasamos los datos al html
+		for f in escribir:
+			file.writelines(f)
+		for f in range(25,len(planti),1):
+			file.writelines(planti[f] + '\n')
+
+def Total(p1, Tam = 'T'):
+	""" Devuelve el espacio total que hay en un disco determinado en TB
+	"""
+	if Tam == 'M':
+		Tam = 1024 * 1024
+	elif Tam == 'G':
+		Tam = 1024 * 1024 * 1024
+	elif Tam == 'T':
+		Tam = 1024 * 1024 * 1024 * 1024
+
+	if env.SISTEMA == 'Windows':
+		import wmi
+		sys = wmi.WMI()
+		for f in sys.Win32_LogicalDisk():
+			if f.Caption == p1[0:2].upper():
+				total = round(int(f.Size) / Tam, 3)
+				break
+	else:
+		disco = os.statvfs(p1)
+		total = round((disco.f_blocks * disco.f_bsize) / Tam, 3)
+	return total
 	
 def Trailer(p1):
 	""" Se encarga de extraer del fichero NFO de una peli la información necesaria para obtener la URL del trailer de la película
@@ -1200,7 +2018,7 @@ def Trailer(p1):
 		else:
 			Log('No encontramos el fichero NFO para ' + p1)
 			return ''
-	with open(env.TMP + 'NFO') as file:
+	with open(env.TMP + 'NFO', encoding="utf-8") as file:
 		info = file.read()
 	dom = parseString(info)
 	try:
@@ -1227,6 +2045,7 @@ def Traspasa(Copio = 1, Monta = 1):
 	""" Se encarga de pasar lo bajado a Series al pendrive de mi hermano y a su correspondiente carpeta en pasados
 	Copio si valor 1, se encarga de decirle si copia los ficheros al pen, en caso de 0 solo los procesa para ponerlos en pasados
 	Monta si valor 1, desmonta el pen al acabar, en caso de 0 lo deja montado
+	Añadimos la rutina para extraer subtítulos en caso de que sea una serie que viene en .mkv para poder verla en la TV
 	"""
 	Copio = int(Copio)
 	Monta = int(Monta)
@@ -1241,11 +2060,6 @@ def Traspasa(Copio = 1, Monta = 1):
 			exit(1)
 	# Activamos el led verde para informar de que hemos empezado la copia
 	os.system('/home/hector/bin/ledonoff cpu0')
-	# Cargamos las series que conocemos actualmente para no confundir las mayúsculas y minúsculas
-	os.chdir(env.MM + 'scaratulas')
-	Series = next(os.walk('.'))[2]
-	# Quitamos la extensión de la carátula
-	Series = [f[0:-4] for f in Series]
 	# Nos pasamos a la carpeta de las series
 	os.chdir(env.SERIES)
 	# Leemos los ficheros de la carpeta
@@ -1297,6 +2111,10 @@ def Traspasa(Copio = 1, Monta = 1):
 			# Cambiamos los permisos a rwxrw-rw-
 			os.chmod(env.PASADOS + capi.ConSerie, 0o766)
 			copiado = 1
+			# Chequeamos si es un mkv y pertenece a una serie que estamos viendo para extraer los subtítulos
+			if capi.Tipo == 'mkv' and capi.Vemos():
+				Log('Extraemos los subtítulos de ' + capi.Todo, True, 'Traspasa: ')
+				SacaSubs(env.PASADOS + capi.ConSerie)
 		else:
 			# Si no es una serie lo pasamos a la carpeta otros
 			Log('Como parece que no es una serie, lo movemos a otros')

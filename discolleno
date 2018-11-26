@@ -1,0 +1,4 @@
+#!/bin/bash
+python3 /home/hector/bin/funciones.py Borra 5
+sleep 3
+df -h /mnt/e | mutt -s "Disco de la PiMulita sin espacio" -c Hector.D.Rguez@gmail.com &>>/tmp/saldisco.txt

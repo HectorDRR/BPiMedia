@@ -2,14 +2,17 @@ function Series {
 	find /mnt/e/pasados/ -type f -perm -u+rwx -exec du -ch '{}' +|sort -k 2|more
 }
 uptime
-free
+free -h
 echo Temperatura: `cat /sys/class/thermal/thermal_zone0/temp`
-pgrep -l amu
-pgrep -l trans
-pgrep -l minidlna
-pgrep -l smb
-pgrep -l vsftpd
-df -h /mnt/e /media
+procesos.sh
+# Vemos cuanto espacio queda libre para ponerlo en otro color en caso de que haya poco
+tam=$(df -h /mnt/e|tail -1|cut -c 31-33)
+echo .
+if [ $tam -lt 10 ] 
+	then echo -e "Solo quedan\e[31m$tam\e[0mG libres en /mnt/e"
+	else echo -e "Quedan \e[92m$tam G\e[0m libres en /mnt/e"
+fi
+echo .
 if [ $1p == sp ];
 	then Series;
 	exit;
@@ -22,11 +25,11 @@ if [ -a /media/Series ]
 	ls -lhst /media/Series /media/Pelis
 fi
 echo HD pendiente pasar a Pen
-find /mnt/e/HD/ \( -perm 666 -o -perm 646 \) -exec du -ch '{}' +
+find /mnt/e/HD/ -maxdepth 1 \( -perm 666 -o -perm 646 \) -exec du -ch '{}' +
 echo HD pendiente pasar a disco
-find /mnt/e/HD/ \( -perm 666 -o -perm 766 \) -exec du -ch '{}' +
+find /mnt/e/HD/ -maxdepth 1 \( -perm 666 -o -perm 766 \) -exec du -ch '{}' +
 echo HD Infantiles pendientes de pasar a disco
-find /mnt/e/HD/ \( -perm 746 -o -perm 646 \) -exec du -ch '{}' +
+find /mnt/e/HD/ -maxdepth 1 \( -perm 746 -o -perm 646 \) -exec du -ch '{}' +
 ls -lhst /mnt/e/HD|grep drwx
 echo Ahora las Series
 read p
@@ -60,3 +63,4 @@ read p
 sudo tail -40 /var/log/syslog|grep -v 'shrunk window'|grep -v CRON
 [ -f /tmp/mulacaida.txt ] && cat /tmp/mulacaida.txt
 [ -f /tmp/ftpcaido.txt ] && cat /tmp/ftpcaido.txt
+tail /var/log/placa.log
