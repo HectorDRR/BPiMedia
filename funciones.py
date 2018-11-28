@@ -216,7 +216,7 @@ class SonoffTH:
 		# Pedimos Estado
 		self.LeeEstado()
 	
-	def Controla(self, Modo, TMax = 37, TMin = 35, Tiempo = 0):
+	def Controla(self, Modo, TMax = 35, TMin = 33, Tiempo = 0):
 		""" Función encargada de controlar el SonOff de la placa a través de MQTT.
 		Si Controla: 0 Paramos la placa
 					 1 Activamos manualmente con opción de tiempo para desonexión automática
@@ -305,7 +305,7 @@ class SonoffTH:
 						# En caso de tenerla que mantener más de 6 minutos encendida los hacemos en tramos de 6 minutos
 						for f in range(0, Tiempo // 360, 1):
 							self.client.publish('cmnd/' + self.Topico + '/BACKLOG', 'POWER ON;DELAY 3600;POWER OFF')
-							time.sleep(360)
+							time.sleep(362)
 							# Para ir monitorizando, vamos pasando al log la temperatura
 							Log('Temperatura de la ' + self.Topico + ': ' + str(self.LeeTemperatura()) + 'º', self.Debug)
 							if self.Temperatura >= TMax:
@@ -313,12 +313,12 @@ class SonoffTH:
 						# Y por último, la mantenemos encendida el tiempo restante no múltiplo de 6 minutos
 						# Al delay el tiempo se le pasa en décimas de segundo, así que en vez de * 10 sencillamente le añadimos un 0
 						self.client.publish('cmnd/' + self.Topico + '/BACKLOG', 'POWER ON;DELAY ' + str(Tiempo % 360) + '0;POWER OFF')
-						time.sleep(Tiempo % 360)
+						time.sleep(Tiempo % 360 + 2)
 					else:
 						self.client.publish('cmnd/' + self.Topico + '/BACKLOG', 'POWER ON;DELAY ' + str(Tiempo) + '0;POWER OFF')
-						time.sleep(Tiempo)
+						time.sleep(Tiempo + 2)
 				# Esperamos un minuto para dar tiempo a que la temperatura en el sensor se estabilize
-				time.sleep(60)
+				# time.sleep(60)
 			Log('Terminamos el control de la ' + self.Topico + ' con una temperatura de ' + str(self.Temperatura) + 'º', self.Debug)
 		return True
 
@@ -368,16 +368,17 @@ class SonoffTH:
 			# Creamos la instancia de la Bomba
 			bomba = SonoffTH('bomba', True)
 			# La activamos por 10 segundos
-			bomba.Controla(1, Tiempo = 10)
+			#bomba.Controla(1, Tiempo = 15)
 			# Esperamos unos segundos más para que se caliente la sonda
-			time.sleep(30)
+			bomba.Fin()
+			time.sleep(100)
 		bucle = 0
 		self.Temperatura = 0
 		while self.Temperatura == 0:
 			# Pedimos la temperatura
 			self.client.publish('cmnd/' + self.Topico + '/STATUS', '10')
 			# Damos algo de tiempo para procesar la respuesta
-			time.sleep(1)
+			time.sleep(2)
 			bucle += 1
 			if bucle > 1:
 				self.Debug = True
@@ -521,7 +522,7 @@ def Bomba(Debug = False):
 	# Finalizamos el objeto
 	placa.Fin()
 	# Si el agua no está caliente, activamos la placa. Hay que pasar este valor a la clase
-	TMin = 40
+	TMin = 30
 	if tplaca < TMin:
 		# Temporalmente, creamos un subproceso para el tema de calentar el agua de la placa sin esperar para poder lanzar la bomba, que es lo que nos interesa. Y lo lanzamos el subproceso redirigiendo la salida y los errores a la misma variable
 		sub = subprocess.Popen(['python3','/home/hector/bin/funciones.py Placa 4'],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -1623,6 +1624,17 @@ def Log(p1, imp = False, fallo = ''):
 		print(escri)
 	return
 
+def MandaCurl(URL):
+	import pycurl
+	from io import BytesIO
+	buffer = BytesIO()
+	c = pycurl.Curl()
+	c.setopt(c.URL, URL)
+	c.setopt(c.WRITEDATA, buffer)
+	c.perform()
+	c.close()
+	return buffer.getvalue().decode()
+	
 def ObtenLista(Ulti = 0):
 	""" Mini función para obtener las películas de una carpeta determinada.
 	"""
@@ -1673,8 +1685,8 @@ def PasaaBD(Fichero = '/var/log/placa.log'):
 	# cursor.execute('''Create TABLE Placa (Fecha	Char(19)	Primary Key Not Null, Temperatura	Real	Not Null, Encendido	Int	Not Null)''')
 	# cursor.execute('''Create TABLE Bomba (Fecha	Char(19)	Primary Key Not Null, Temperatura	Real	Not Null, Encendido	Int	Not Null)''')
 	if Fichero == '/var/log/placa.log':
-		# Renombramos el log para no recibir más datos durante el proceso y cambiamos los permisos
-		os.system('sudo mv ' + Fichero + ' placa_' + time.strftime('%H%M') + '.log && sudo chmod 777 placa_' + time.strftime('%H%M') + '.log')
+		# Renombramos el log para no recibir más datos durante el proceso, cambiamos los permisos y volvemos a crear el fichero para que el rsyslog no se mosquee
+		os.system('sudo mv ' + Fichero + ' placa_' + time.strftime('%H%M') + '.log && sudo chmod 777 placa_' + time.strftime('%H%M') + '.log && sudo service rsyslog restart')
 		# Cambiamos la variable para que apunte al fichero renombrado
 		Fichero = 'placa_' + time.strftime('%H%M') + '.log'
 	else:
@@ -1729,15 +1741,7 @@ def Placa(Quehacemos = 4, Tiempo = 0):
 	temp = 0
 	# Si solo queremos apagar, mandamos el comando por curl y evitamos la inicialización de la clase
 	if Quehacemos == 0:
-		import pycurl
-		from io import BytesIO
-		buffer = BytesIO()
-		c = pycurl.Curl()
-		c.setopt(c.URL, 'http://192.168.1.9/cm?cmnd=Power%20Off')
-		c.setopt(c.WRITEDATA, buffer)
-		c.perform()
-		c.close()
-		return
+		return MandaCurl('http://192.168.1.9/cm?cmnd=Power%20Off')
 	# Creamos la instancia de la bomba
 	bomba = SonoffTH('bomba', True)
 	# Activamos la bomba 10 segundos para que el agua llegue a la sonda en la tubería y la caliente
@@ -2058,7 +2062,7 @@ def Trailer(p1):
 		else:
 			Log('No encontramos el fichero NFO para ' + p1)
 			return ''
-	with open(env.TMP + 'NFO') as file:
+	with open(env.TMP + 'NFO', encoding="utf-8") as file:
 		info = file.read()
 	dom = parseString(info)
 	try:
