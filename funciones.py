@@ -19,9 +19,6 @@ env = __import__('Entorno_' + sys.platform)
 # Aunque la lectura de los ficheros es rápida, creamos una variable global que contenga todas las series para
 # no estarlas cargando cada vez que queremos comprobar un capítulo desde Capitulo.Existe()
 Series = []
-# Para poder leer la temperatura y el estado del SonOff
-Temp = 0.0
-Estado = ''
 
 class Capitulo:
 	""" Tratamiento de capítulos de series
@@ -322,7 +319,6 @@ class SonoffTH:
 		""" Esta función obtiene el estado del SonOff para saber si está encendido o apagado
 		Debido a que a veces no responde a tiempo esperamos hasta que se produzca la respuesta.
 		"""
-		bucle = 0
 		self.Estado = eval(self.MandaCurl('Power'))['POWER'][0:2]
 		return self.Estado
 	
@@ -354,7 +350,7 @@ class SonoffTH:
 			self.Topico = 'bomba'
 			self.MandaCurl('backlog power on;delay 150;power off')
 			self.Topico = 'placa'
-			# Esperamos un rato para que llegue el caor al sensor
+			# Esperamos un rato para que llegue el calor al sensor
 			time.sleep(100)
 		self.Temperatura = round(eval(self.MandaCurl('Status 10'))['StatusSNS']['DS18B20']['Temperature'])
 		return self.Temperatura
@@ -407,7 +403,7 @@ def BajaSeries(Batch = False, Debug = False):
 	for f in lista:
 		if not Queda(f, env.HD, ftp):
 			if Batch:
-				Log('No queda espacio en Z para copiar ' + f)
+				Log('No queda espacio para copiar ' + f)
 				continue
 			else:
 				if input('No queda espacio suficiente en ' + env.HD[0:2] + ', limpia') == 'n':
@@ -451,8 +447,12 @@ def BajaSeries(Batch = False, Debug = False):
 		# Si es de alguna serie que nos interesa
 		# Lo descargamos en su carpeta si hay espacio
 		if not Queda(capi.Todo, env.PASADOS, ftp):
-			if input('No queda espacio suficiente en ' + env.PASADOS[0:2] + ', limpia') == 'n':
+			if Batch:
+				Log('No queda espacio para copiar ' + f)
 				continue
+			else:
+				if input('No queda espacio suficiente en ' + env.PASADOS[0:2] + ', limpia') == 'n':
+					continue
 		os.chdir(capi.Serie)
 		with open(capi.Todo, 'wb') as file:
 			Log('Descargamos ' + capi.Todo, True)
@@ -1644,8 +1644,8 @@ def PasaaBD(Fichero = '/var/log/placa.log'):
 	# cursor.execute('''Create TABLE Placa (Fecha	Char(19)	Primary Key Not Null, Temperatura	Real	Not Null, Encendido	Int	Not Null)''')
 	# cursor.execute('''Create TABLE Bomba (Fecha	Char(19)	Primary Key Not Null, Temperatura	Real	Not Null, Encendido	Int	Not Null)''')
 	if Fichero == '/var/log/placa.log':
-		# Renombramos el log para no recibir más datos durante el proceso y cambiamos los permisos
-		os.system('sudo mv ' + Fichero + ' placa_' + time.strftime('%H%M') + '.log && sudo chmod 777 placa_' + time.strftime('%H%M') + '.log')
+		# Renombramos el log para no recibir más datos durante el proceso y cambiamos los permisos. Reiniciamos el rsyslog que si no se queda abobado y no recibe más logs
+		os.system('sudo mv ' + Fichero + ' placa_' + time.strftime('%H%M') + '.log && sudo chmod 777 placa_' + time.strftime('%H%M') + '.log &&sudo service rsyslog restart')
 		# Cambiamos la variable para que apunte al fichero renombrado
 		Fichero = 'placa_' + time.strftime('%H%M') + '.log'
 	else:
