@@ -170,6 +170,18 @@ class Capitulo:
 		if self.Serie in ver:
 			return True
 		return False
+	
+	def Mueve(self, Donde = env.PASADOS, FTP = False):
+		""" Se encarga de pasar o mover el capítulo a su carpeta correspondiente. Solo tenemos que pasarle la ruta raiz, 
+		por defecto, asumimos env.PASADOS.
+		Asumimos que se usará solo cuando vaya a la carpeta correspondiente con el nombre de la serie.
+		En caso de guardarlas en disco externo (Donde = env.SERIESG) solo las copiamos, no las movemos
+		"""
+		if Donde == env.SERIESG:
+			quehacemos = 'mv'
+		else:
+			quehacemos = 'cp'
+		
 
 class SonoffTH:
 	""" Para manipular los SonOff con sensor de temperatura
@@ -487,7 +499,7 @@ def Bomba(Debug = False):
 	# Pasamos el valor a una variable para poder finalizar el objeto
 	tplaca = placa.Temperatura
 	# Si el agua no está caliente, activamos la placa. Hay que pasar este valor a la clase
-	TMin = 30
+	TMin = 35
 	if (tplaca < TMin and int(time.strftime('%H')) < 23 and int(time.strftime('%H')) > 6):
 		# Temporalmente, creamos un subproceso para el tema de calentar el agua de la placa sin esperar para poder lanzar la bomba, que es lo que nos interesa. Y lo lanzamos el subproceso redirigiendo la salida y los errores a la misma variable
 		sub = subprocess.Popen(['python3','/home/hector/bin/funciones.py Placa 4'],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -513,26 +525,6 @@ def Bomba(Debug = False):
 	Log('Despues de ' + str(f*10 + g*10) + ' segundos la temperatura es de ' + str(bomba.Temperatura) + 'º y al comenzar era de ' + str(temperatura -delta) + 'º', True)
 	time.sleep(150)
 	Log('Después de 150 segundos más la temperatura es de ' + str(bomba.LeeTemperatura()) + 'º')
-	if False:
-		# Comprobamos si está desactivada la bomba y que la temperatura es menor del objetivo
-		while (not bomba.Estado == 'ON' and bomba.LeeTemperatura() < temperatura):
-			# Calculamos el tiempo de funcionamiento en base al diferencial de temperatura. Como lo establecemos en 5º vamos a poner 12 segundos por º
-			tiempo = (temperatura - bomba.Temperatura) * 12
-			# La activamos durante el tiempo necesario. No es necesaria la temperatura mínima, que es el segundo parámetro, puesto que lo controlamos manualmente
-			Log('Activamos bomba con una temperatura de ' + str(bomba.Temperatura) + ' durante ' + str(tiempo) + ' segundos', Debug)
-			bomba.Controla(1, temperatura, 0, tiempo)
-			# Debido a la inercia térmica, esperamos un minuto adicional antes de volver a leer la temperatura para dar tiempo a que el calor llegue al sensor
-			time.sleep(tiempo + 60)
-			# La paramos. Ya no es necesario al implementar el parámetro de tiempo con el backlog en la llamada al SonOff
-			# Log('Paramos la bomba ' + str(tiempo) + ' segundos después y esperamos 60 segundos para volver a medir la temperatura', Debug)
-			# bomba.Controla(0)
-		else:
-			# Si está activa la paramos
-			Log('Paramos la bomba. Temp. Inicial: ' + str(temperatura - 5) + 'º y la temperatura final es de ' + str(bomba.Temperatura) + 'º', Debug)
-			if bomba.Estado == 'ON':
-				bomba.Controla(0)
-		time.sleep(300)
-		Log('Temperatura de la bomba 5 minutos después: ' + str(bomba.LeeTemperatura()) + 'º', Debug)
 	return
 
 def Borra(Liberar = 30, Dias = 20, Auto = 0):
@@ -1643,15 +1635,17 @@ def PasaaBD(Fichero = '/var/log/placa.log'):
 	# Creamos las tablas sólo la primera vez
 	# cursor.execute('''Create TABLE Placa (Fecha	Char(19)	Primary Key Not Null, Temperatura	Real	Not Null, Encendido	Int	Not Null)''')
 	# cursor.execute('''Create TABLE Bomba (Fecha	Char(19)	Primary Key Not Null, Temperatura	Real	Not Null, Encendido	Int	Not Null)''')
+	# Tomamos la hora del momento por si hay un cambio de minuto en medio de la operación, que ya nos pasó.
+	hora = time.strftime('%H%M')
 	if Fichero == '/var/log/placa.log':
 		# Renombramos el log para no recibir más datos durante el proceso y cambiamos los permisos. Reiniciamos el rsyslog que si no se queda abobado y no recibe más logs
-		os.system('sudo mv ' + Fichero + ' placa_' + time.strftime('%H%M') + '.log && sudo chmod 777 placa_' + time.strftime('%H%M') + '.log &&sudo service rsyslog restart')
+		os.system('sudo mv ' + Fichero + ' placa_' + hora + '.log && sudo chmod 777 placa_' + hora + '.log &&sudo service rsyslog restart')
 		# Cambiamos la variable para que apunte al fichero renombrado
-		Fichero = 'placa_' + time.strftime('%H%M') + '.log'
+		Fichero = 'placa_' + hora + '.log'
 	else:
 		esotro = True
 	# Cargamos los datos de la placa. Idealmente, deberíamos hacer la criba nosotros y no a través del grep
-	Datos = list(filter(None,os.popen('grep -v STATUS10 ' + Fichero + ' | grep -v /POWER | grep -v bomba|grep -v UPTIME|grep -v RESULT').read().split('\n')))
+	Datos = list(filter(None,os.popen('grep -e placa/SENSOR -e placa/STATE ' + Fichero + ' --color=none').read().split('\n')))
 	Encendido = -1
 	Temperatura = 0.0
 	contador = 0
@@ -1690,7 +1684,7 @@ def Placa(Quehacemos = 4, Tiempo = 0):
 	""" Función encargada de controlar el SonOff de la placa a través de MQTT.
 	Si Quehacemos: 0 Paramos la placa
 				   1 Activamos la placa
-				   2 Estamos controlando la placa de manera automática (Las consignas de temperatura están establecidas por defecto en la clase)
+				   4 Estamos controlando la placa de manera automática (Las consignas de temperatura están establecidas por defecto en la clase)
 				   Otro solo consultamos temperatura
 	En caso de solo querer apagarla vamos a prescindir del MQTT e ir directamente usando el curl
 	"""
@@ -1700,17 +1694,17 @@ def Placa(Quehacemos = 4, Tiempo = 0):
 	temp = 0
 	# Si solo queremos apagar, mandamos el comando por curl y evitamos la inicialización de la clase
 	if Quehacemos == 0:
-		return MandaCurl('http://192.168.1.9/cm?cmnd=Power%20Off')
+		return MandaCurl('http://placa/cm?cmnd=Power%20Off')
 	# Creamos la instancia de la bomba
-	bomba = SonoffTH('bomba', True)
+	# bomba = SonoffTH('bomba', True)
 	# Activamos la bomba 10 segundos para que el agua llegue a la sonda en la tubería y la caliente
-	bomba.Controla(1, Tiempo = 10)
+	# bomba.Controla(1, Tiempo = 10)
 	# Esperamos 30 segundos para que coja temperatura el sensor
-	time.sleep(30)
+	# time.sleep(30)
 	# Creamos la instancia de la placa
 	placa = SonoffTH('placa', True)
-	if (placa.LeeTemperatura() > 30 and Quehacemos == 4):
-		Log('La temperatura del agua está a ' + str(placa.Temperatura) + 'º, por lo que no la activamos', True)
+	if (placa.LeeTemperatura() > 35 and Quehacemos == 4):
+		Log('La temperatura del agua está a ' + str(placa.Temperatura) + 'º, por lo que no activamos la placa', True)
 	else:
 		# En caso de control sencillo, como ya está programado en la clase lo pasamos directamente
 		placa.Controla(Quehacemos, Tiempo)

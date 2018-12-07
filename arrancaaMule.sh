@@ -20,7 +20,7 @@ if [ $? -eq 1 ]
 		exit
 fi
 # Si no es eso, chequeamos si se ha cerrado solo
-tail -1 /mnt/e/.aMule/logfile|grep 'Todos los archivos'
+tail -1 /mnt/e/.aMule/logfile|grep -e 'Todos los archivos' -e 'All PartFiles' -e 'Asio Sockets'
 if [ $? -eq 0 ]
 	then
 		echo $(date) aMule parado, lo arrancamos de nuevo>>/tmp/mulacaida.txt

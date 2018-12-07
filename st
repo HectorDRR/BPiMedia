@@ -6,11 +6,12 @@ free -h
 echo Temperatura: `cat /sys/class/thermal/thermal_zone0/temp`
 procesos.sh
 # Vemos cuanto espacio queda libre para ponerlo en otro color en caso de que haya poco
-tam=$(df -h /mnt/e|tail -1|cut -c 31-33)
+# Usamos el printf para conventirlo a entero redondeando puesto que el bash no admite comparar floats
+printf -v tam '%.0f' $(df -h /mnt/e|tail -1|cut -c 31-33)
 echo .
 if [ $tam -lt 10 ] 
-	then echo -e "Solo quedan\e[31m$tam\e[0mG libres en /mnt/e"
-	else echo -e "Quedan \e[92m$tam G\e[0m libres en /mnt/e"
+	then echo -e "Solo quedan \e[31m$tam\e[0m GB libres en /mnt/e"
+	else echo -e "Quedan \e[92m$tam \e[0m GB libres en /mnt/e"
 fi
 echo .
 if [ $1p == sp ];
