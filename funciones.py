@@ -49,13 +49,19 @@ class Capitulo:
 			else:
 				espacio = 0
 			self.Titulo = result[1][espacio:-4]
-			self.Temp = Todo[len(result[0])+1:Todo.find('x')]
+			# Obtenemos la temporada buscando la x después del título
+			self.Temp = Todo[len(result[0])+1:Todo.find('x', len(result[0]))]
 			# Si no tiene título buscamos el '.'. En caso contrario, buscamos el primer espacio
 			if len(self.Titulo) == 0:
 				buscar = '.'
 			else:
 				buscar = ' '
 			self.Capi = Todo[Todo.find('x',len(result[0])+1)+1:Todo.find(buscar,len(result[0])+1)]
+			# Si es un capítulo doble
+			if len(self.Capi) > 2:
+				self.Doble = True
+			else:
+				self.Doble = False
 			self.Tipo = Todo[-3:]
 			# Limpiamos el nombre del capítulo
 			self.Limpia(FTP)
@@ -213,7 +219,7 @@ class SonoffTH:
 		# Pedimos Estado
 		self.LeeEstado()
 	
-	def Controla(self, Modo, TMax = 35, TMin = 33, Tiempo = 0):
+	def Controla(self, Modo, TMax = 40, TMin = 35, Tiempo = 0):
 		""" Función encargada de controlar el SonOff de la placa a través de MQTT.
 		Si Controla: 0 Paramos la placa
 					 1 Activamos manualmente con opción de tiempo para desonexión automática
@@ -296,8 +302,8 @@ class SonoffTH:
 					# En el caso de la bomba, 12 segundos por grado
 					grado = 12
 				elif self.Topico == 'placa':
-					# En el caso de la placa, partiendo de 1,5 kW de resistencia y 200 l de depótiso obtenemos unos 10 minutos
-					grado = 600
+					# En el caso de la placa, partiendo de 2 kW de resistencia y 200 l de depótiso obtenemos unos 7,5 minutos
+					grado = 450
 				Tiempo = temperatura * grado
 				# Solo podemos poner un delay de máximo 6 minutos, y la placa necesita 10 minutos por grado
 				# Si está desactivada, la activamos
@@ -311,8 +317,8 @@ class SonoffTH:
 							time.sleep(362)
 							# Para ir monitorizando, vamos pasando al log la temperatura
 							Log('Temperatura de la ' + self.Topico + ': ' + str(self.LeeTemperatura()) + 'º', self.Debug)
-							if self.Temperatura >= TMax:
-								break
+							#if self.Temperatura >= TMax:
+							#	break
 						# Y por último, la mantenemos encendida el tiempo restante no múltiplo de 6 minutos
 						# Al delay el tiempo se le pasa en décimas de segundo, así que en vez de * 10 sencillamente le añadimos un 0
 						#self.client.publish('cmnd/' + self.Topico + '/BACKLOG', 'POWER ON;DELAY ' + str(Tiempo % 360) + '0;POWER OFF')
@@ -323,13 +329,12 @@ class SonoffTH:
 						self.MandaCurl('BACKLOG POWER ON;DELAY ' + str(Tiempo) + '0;POWER OFF')
 						time.sleep(Tiempo + 2)
 				# Esperamos un minuto para dar tiempo a que la temperatura en el sensor se estabilize
-				# time.sleep(60)
+				time.sleep(60)
 			Log('Terminamos el control de la ' + self.Topico + ' con una temperatura de ' + str(self.Temperatura) + 'º', self.Debug)
 		return True
 
 	def LeeEstado(self):
 		""" Esta función obtiene el estado del SonOff para saber si está encendido o apagado
-		Debido a que a veces no responde a tiempo esperamos hasta que se produzca la respuesta.
 		"""
 		self.Estado = eval(self.MandaCurl('Power'))['POWER'][0:2]
 		return self.Estado
@@ -352,18 +357,8 @@ class SonoffTH:
 		return
 
 	def LeeTemperatura(self):
-		""" Esta función obtiene la temperatura actual del sensor del SonOff. Requiere que el bucle sea 
-		iniciado y cerrado desde la función llamante.
-		Debido a que a veces no responde a tiempo esperamos hasta que se produzca la respuesta.
-		Al mover el sensor a la tubería, requerimos activar la bomba unos segundos antes de poder leer la temperatura real.
+		""" Esta función obtiene la temperatura actual del sensor del SonOff.		
 		"""
-		if self.Topico == 'placa':
-			# Activamos la bomba 15 segundos. Tenemos que cambiar el tópico temporalmente para que self.MandaCurl funcione correctamente
-			self.Topico = 'bomba'
-			self.MandaCurl('backlog power on;delay 150;power off')
-			self.Topico = 'placa'
-			# Esperamos un rato para que llegue el calor al sensor
-			time.sleep(100)
 		self.Temperatura = round(eval(self.MandaCurl('Status 10'))['StatusSNS']['DS18B20']['Temperature'])
 		return self.Temperatura
 
@@ -1359,7 +1354,7 @@ def LimpiaPuntos(Mascara, Parent = '('):
 	f = sinparent
 	return f
 
-def ListaCapitulos2(Serie, Ruta):
+def ListaCapitulos(Serie, Ruta):
 	""" Se encarga de revisar los capítulos de una serie dada para sacar un resumen de los mismos y 
 	detectar si faltan capítulos en alguna temporada o están repetidos.
 	
@@ -1367,7 +1362,7 @@ def ListaCapitulos2(Serie, Ruta):
 	los capítulos es homogénea, y no tenemos mezcla de mayúsculas o minúsculas así como otras alteraciones
 	
 	Esta es una segunda versión usando el Objeto Capitulo que aún está pendiente de desarrollar correctamente.
-	Mos quedamos con problemas para tratar los capítulos dobles, por ejemplo en Babylon Berlin que además se trata del primero
+	Nos quedamos con problemas para tratar los capítulos dobles, por ejemplo en Babylon Berlin que además se trata del primero
 	"""
 	import glob
 	if env.SISTEMA == 'Windows':
@@ -1377,8 +1372,8 @@ def ListaCapitulos2(Serie, Ruta):
 	# Leemos todos los capítulos
 	lista = glob.glob('*.avi')
 	lista.extend(glob.glob('*.mkv'))
-	lista.sort
-	donde = len(Serie) + 1
+	lista.extend(glob.glob('*.mp4'))
+	lista.sort()
 	# Convertimos en objeto y lo metemos en una lista
 	serie = []
 	for f in lista:
@@ -1387,36 +1382,44 @@ def ListaCapitulos2(Serie, Ruta):
 	# y también informar si nos saltamos alguno
 	# cogemos la información de la primera temporada y el primer capítulo almacenado
 	tem = serie[0].Temp
-	# Metemos en una lista los números de los capítulos para mostrarlos en pantalla y poder depurar
-	capis = []
+	# Metemos en una lista los números de las temporadas y los capítulos para mostrarlos en pantalla y poder depurar
+	lista = serie[0].Serie + ': '
 	for f in serie:
-		capis.append(f.Capi)
-	print(capis, Serie)
-	# Le restamos 1 al capítulo para que haya una secuencia válida. No empezamos por 0 puesto que hay series
-	# que parte están grabadas en CD, no en disco duro
-	if len(serie[0].Capi) > 2:
-		capi = int(serie[0].Capi[-2:]) - 1
+		lista = lista + f.Temp + 'x' + f.Capi + ', '
+	print(lista[:-2])
+	# Guardamos el primer capítulo teniendo en cuenta si es doble
+	if serie[0].Doble:
+		capi = serie[0].Capi[0:2]
 	else:
-		capi = int(serie[0].Capi) - 1
-	resumen = serie[0].Serie + ' - '
+		capi = serie[0].Capi
+	resumen = tem + 'x' + capi + '-'
+	# Lo convertimos a entero para usarlo en el bucle. Le restamos 1 por si la serie empieza en 0 (Piloto) para que en el bucle funcione correctamente
+	capi = int(capi) - 1
 	saltados = ''
 	for f in serie:
 		# Si hemos cambiado de temporada
 		if not tem == f.Temp:
+			if f.Doble:
+				tcapi = f.Capi[0:2]
+			else:
+				tcapi = f.Capi
 			# Ponemos en el resumen el capítulo final de la temporada anterior y el primero de la actual
-			resumen = resumen + '{0:02d} '.format(capi) + ', ' + f.Capi + ' - '
+			resumen = resumen + '{0:02d}'.format(capi) + ', ' + f.Temp + 'x' + tcapi + '-'
 			tem = f.Temp
-			capi = 0
-			if int(f.Capi) == 0:
-				capi = -1
-		# Chequeamos si es un capítulo doble y añadimos 1 a la suma para que no nos de como que falta 
-		# el primero de los dos, puesto que solo chequea los dos últimos carcteres de la cadena
-		if f.Capi.find('-') > 0:
-			capi = capi + 1
+			capi = int(tcapi)
+			# Saltamos al siguiente
+			continue
+		# Chequeamos si es un capítulo doble y nos quedamos con el último y cambiamos doble a 2 para la suma siguiente en el chequeo de si nos falta un capítulo
+		if f.Doble:
+			tcapi = int(f.Capi[-2:])
+			doble = 2
+		else:
+			tcapi = int(f.Capi)
+			doble = 1
 		# Si nos hemos saltado un capítulo
-		if not int(f.Capi) == capi + 1:
+		if not tcapi == capi + doble:
 			# Si está repetido
-			if int(f.Capi) == capi:
+			if tcapi == capi:
 				Log('Capítulo ' + tem + 'x' + str(capi) + ' de la serie %s repetido' % Serie, True)
 				continue
 			# Entonces, falta, así que lo añadimos a la lista, pero hay que comprobar si hay más seguidos que faltan
@@ -1426,14 +1429,14 @@ def ListaCapitulos2(Serie, Ruta):
 					saltados = saltados + tem + 'x{0:02d}, '.format(x)
 				else:
 					break
-		capi = int(f.Capi)
-	resumen = resumen + '{0:02d} '.format(capi)
+		capi = tcapi
+	resumen = resumen + '{0:02d}'.format(capi)
 	if len(saltados) > 0:
 		resumen = resumen + '. Faltan= ' + saltados
 		Log('Capítulos que faltan en ' + Serie + ': ' + saltados, True)
 	return resumen
 
-def ListaCapitulos(Serie, Ruta):
+def ListaCapitulos2(Serie, Ruta):
 	""" Se encarga de revisar los capítulos de una serie dada para sacar un resumen de los mismos y 
 	detectar si faltan capítulos en alguna temporada o están repetidos.
 	
