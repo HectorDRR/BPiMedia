@@ -21,11 +21,12 @@ env = __import__('Entorno_' + sys.platform)
 Series = []
 
 class Capitulo:
-	""" Tratamiento de capítulos de series
+	""" Tratamiento de capítulos de series, teniendo en cuenta si se manipulan a través de FTP o localmente
 	Dividimos el nombre en:
 		Titulo: Solo el título del capítulo
 		Serie: El nombre de la Serie
-		Capi: el número del capítulo
+		Capi: El número del capítulo
+		Doble: Si es un capítulo doble
 		Temp: El número de la temporada
 		Tipo: La extensión
 		Todo: El nombre completo del fichero
@@ -35,6 +36,7 @@ class Capitulo:
 		""" Inicializamos las variables y dividimos el nombre del capítulo en sus componentes
 		"""
 		self.Todo = Todo
+		self.FTP = FTP
 		# Filtro para buscar donde está la numeración de la serie. Teniendo en cuenta que algunos capítutlos no tienen título
 		# y viene un '.' directamente después del número del capítulo
 		pp = re.compile(' \d+x\d\d(?:-\d\d)?')
@@ -64,7 +66,7 @@ class Capitulo:
 				self.Doble = False
 			self.Tipo = Todo[-3:]
 			# Limpiamos el nombre del capítulo
-			self.Limpia(FTP)
+			self.Limpia()
 			self.ConSerie = self.Serie + env.DIR + self.Todo
 		else:
 			self.Ok = False
@@ -72,7 +74,7 @@ class Capitulo:
 		#print(self.__dict__)
 		return
 
-	def Existe(self, FTP = False, Debug = False):
+	def Existe(self, Debug = False):
 		""" Para comprobar si la serie ya existe y procurar ponerle el mismo nombre que ya tiene o si no existe,
 		crear su carpeta
 		"""
@@ -85,15 +87,15 @@ class Capitulo:
 		# En caso de que aún no las hayamos cargado, cargamos las series, tanto de las que ya tienen carátulas como de las que
 		# están en pasados pero que aún no hemos copiado o creado carátula
 		if len(Series) == 0:
-			if FTP:
+			if self.FTP:
 				# Guardamos la carpeta actual
-				anterior = FTP.pwd()
-				FTP.cwd('/mnt/f/scaratulas/')
-				Series = FTP.nlst()
-				FTP.cwd(destino)
-				SinCaratula = FTP.nlst()
+				anterior = self.FTP.pwd()
+				self.FTP.cwd('/mnt/f/scaratulas/')
+				Series = self.FTP.nlst()
+				self.FTP.cwd(destino)
+				SinCaratula = self.FTP.nlst()
 				# Volvemos a la carpeta inicial
-				FTP.cwd(anterior)
+				self.FTP.cwd(anterior)
 			else:
 				Series = next(os.walk(env.MM + 'scaratulas'))[2]
 				SinCaratula = next(os.walk(env.PASADOS))[2]
@@ -105,23 +107,23 @@ class Capitulo:
 		if self.Serie in Series:
 			Existe = True
 			# Comprobamos que existe la carpeta en Pasados, ya que es posible que la Serie exista pero la carpeta no
-			if FTP:
-				actual = FTP.pwd()
+			if self.FTP:
+				actual = self.FTP.pwd()
 				try:
-					FTP.cwd(destino + self.Serie)
+					self.FTP.cwd(destino + self.Serie)
 				except:
 					Log('Creamos la carpeta ' + self.Serie + ' en remoto', Debug)
-					FTP.mkd(destino + self.Serie)
+					self.FTP.mkd(destino + self.Serie)
 				# Volvemos a nuestra carpeta
-				FTP.cwd(actual)
+				self.FTP.cwd(actual)
 		else:
 			for s in Series:
 				# Si el nombre en mayúsculas es igual, pero no lo es el original
 				if s.upper() == self.Serie.upper() and not s == self.Serie:	
 					# Renombramos el fichero original con el nombre que ha de tener
 					# print('Nombre actual: ' + self.Serie, 'Nombre correcto: ' + s, 'Nombre a cambiar: ' + self.Todo.replace(self.Serie,s))
-					if FTP:
-						FTP.rename(self.Todo, self.Todo.replace(self.Serie,s))
+					if self.FTP:
+						self.FTP.rename(self.Todo, self.Todo.replace(self.Serie,s))
 					else:
 						os.rename(self.Todo, self.Todo.replace(self.Serie,s))
 					# Cambiamos también las variables
@@ -134,9 +136,9 @@ class Capitulo:
 		# Si llegamos hasta aquí es que no existe la carpeta ni hay un error en mayúsculas/minúsculas
 		if not Existe:
 			# Creamos la carpeta
-			if FTP:
+			if self.FTP:
 				try:
-					FTP.mkd(destino + self.Serie)
+					self.FTP.mkd(destino + self.Serie)
 				except:
 					Log('Ha habido un error creando por FTP la carpeta ' + destino + self.Serie, True)
 			else:
@@ -146,7 +148,7 @@ class Capitulo:
 		# Siempre devolvemos True porque de no existir, la creamos justo antes de retornar. Habrá que ver si en el futuro habrá que cambiarlo
 		return True
 		
-	def Limpia(self, FTP = False):
+	def Limpia(self):
 		""" Limpiamos el nombre del capítulo para quitar lo incluido entre corchetes
 		"""
 		donde = self.Titulo.find('[')
@@ -155,13 +157,13 @@ class Capitulo:
 			if self.Titulo[donde-1] == ' ':
 				donde -= 1
 			sinf = self.Serie + ' ' + self.Temp + 'x' + self.Capi + ' ' + self.Titulo[0:donde] + '.' + self.Tipo
-			if not FTP:
+			if not self.FTP:
 				try:
 					os.rename(self.Todo, sinf)
 				except OSError as e:
 					print('Ha ocurrido un error renombrando el fichero ' + sinf + ': ' + e.strerror)
 			else:
-				FTP.rename(self.Todo, sinf)
+				self.FTP.rename(self.Todo, sinf)
 			self.Titulo = self.Titulo[0:donde]
 			self.Todo = sinf
 		return
@@ -177,17 +179,31 @@ class Capitulo:
 			return True
 		return False
 	
-	def Mueve(self, Donde = env.PASADOS, FTP = False):
+	def Pasa(self, Donde = env.PASADOS):
 		""" Se encarga de pasar o mover el capítulo a su carpeta correspondiente. Solo tenemos que pasarle la ruta raiz, 
 		por defecto, asumimos env.PASADOS.
 		Asumimos que se usará solo cuando vaya a la carpeta correspondiente con el nombre de la serie.
-		En caso de guardarlas en disco externo (Donde = env.SERIESG) solo las copiamos, no las movemos
+		En caso de guardarlo en disco externo (Donde = env.SERIESG) solo lo copiamos, no lo movemos y le cambiamos los permisos
 		"""
 		if Donde == env.SERIESG:
 			quehacemos = 'mv'
 		else:
 			quehacemos = 'cp'
-		
+		# Si no existe la carpeta de la serie, comprobamos mayúsculas y minúsculas y la creamos
+		if not os.path.exists(Donde + self.Serie):
+			self.Existe()
+		if not Queda(capi.Todo, Donde):
+			if input('No queda espacio en ' + Donde) == 'n':
+				return
+		try:
+			os.system(quehacemos + ' ' + self.Todo + ' ' + Donde + self.Serie + '/')
+		except OSError as e:
+			Log('Ha ocurrido un error al hacer ' + quehacemos + 'a ' + Donde + self.Serie + '/ ' + e.strerror, True)
+			return
+		# Si lo hemos copiado a los discos externos, lo marcamos
+		if quehacemos == 'cp':
+			os.chmod(self.Todo, 0o766)
+		Log('Pasado (' + quehacemos + ') ' + self.Todo + ' a ' + Donde + self.Serie)
 
 class SonoffTH:
 	""" Para manipular los SonOff con sensor de temperatura
@@ -410,7 +426,6 @@ def BajaSeries(Batch = False, Debug = False):
 	for f in lista:
 		if not Queda(f, env.HD, ftp):
 			if Batch:
-				Log('No queda espacio para copiar ' + f)
 				continue
 			else:
 				if input('No queda espacio suficiente en ' + env.HD[0:2] + ', limpia') == 'n':
@@ -436,7 +451,7 @@ def BajaSeries(Batch = False, Debug = False):
 			ftp.rename(f, destino + f)
 			continue
 		# Comprobamos si el nombre es correcto y creamos la carpeta en caso necesario
-		capi.Existe(ftp)
+		capi.Existe()
 		# Asignamos el destino a PASADOS
 		destino = '/mnt/e/pasados/'
 		# A partir de aquí hemos de usar capi.Todo por si el nombre ha cambiado
@@ -455,7 +470,6 @@ def BajaSeries(Batch = False, Debug = False):
 		# Lo descargamos en su carpeta si hay espacio
 		if not Queda(capi.Todo, env.PASADOS, ftp):
 			if Batch:
-				Log('No queda espacio para copiar ' + f)
 				continue
 			else:
 				if input('No queda espacio suficiente en ' + env.PASADOS[0:2] + ', limpia') == 'n':
