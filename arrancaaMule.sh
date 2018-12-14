@@ -36,3 +36,11 @@ if [ $? -eq 1 ]
 		echo $(date) Botón parado, lo arrancamos de nuevo>>/tmp/mulacaida.txt
 		sudo screen -d -m -S Botones -h 20000 /home/hector/bin/boton.sh
 fi
+# Comprobamos el vsftpd
+pgrep vsftpd
+if [ $? -eq 1 ]
+	then 
+		echo $(date) VSFTPD parado, lo arrancamos de nuevo>>/tmp/mulacaida.txt
+		sudo service vsftpd start
+fi
+

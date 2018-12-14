@@ -1,6 +1,6 @@
 #! /bin/bash
 # Macro para coprobar que están en funcionamiento los procesos básicos del sistema
-for f in amuled transmiss minidlna smb vsftpd python3; do
+for f in amuled transmiss minidlna smb vsftpd noip2 python3; do
 	pgrep -a $f
 	if [ $? -eq 1 ] 
 		then
