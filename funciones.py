@@ -989,7 +989,7 @@ def Etiqueta(Ruta):
 		Etiq = Etiq[Etiq.find('[')+1:-2]
 	return Etiq
 
-def GeneraLista(Listado, Pelis, Serie = False):
+def GeneraLista(Listado, Pelis, Serie = False, Debug = False):
 	""" Pequeña función para generar la lista de películas o series con sus comentarios si los hubiera.
 	La separamos de la función principal para poder llamarla cuando realizamos la lista de últimas
 	
@@ -1007,7 +1007,7 @@ def GeneraLista(Listado, Pelis, Serie = False):
 				if env.SISTEMA == 'Windows':
 					# Tenemos que cambiar el parámetro Listado[-2:] puesto que en windows no funciona
 					pass
-				capis = ':' + ListaCapitulos(f, Listado[-2:] + env.DIR + 'Series' + env.DIR)
+				capis = ':' + ListaCapitulos(f, Listado[-2:] + env.DIR + 'Series' + env.DIR, Debug)
 			else:
 				que = f[:-3]
 				capis = ''
@@ -1069,7 +1069,7 @@ def GuardaLibre(Ruta):
 	# Obtenemos la etiqueta 
 	Etiq = Etiqueta(Ruta[:-1])
 	# Formamos la línea a escribir
-	linea = Etiq + ' = ' + '{:,g}'.format(libre) + ' GB, ' + '{:,g}'.format(total) + ' TB'
+	linea = '{:10} = '.format(Etiq) + '{:8,.2f} GB, '.format(libre) + '{:.2f} TB'.format(total)
 	# Buscamos la etiqueta de nuestro disco y ponemos el nuevo espacio libre. Devuelve una lista de un elemento
 	vieja = [x for x in lista if x.startswith(Etiq)]
 	# Por si no estaba, buscamos la línea y si no está, la añadimos
@@ -1368,7 +1368,7 @@ def LimpiaPuntos(Mascara, Parent = '('):
 	f = sinparent
 	return f
 
-def ListaCapitulos(Serie, Ruta):
+def ListaCapitulos(Serie, Ruta, Debug = False):
 	""" Se encarga de revisar los capítulos de una serie dada para sacar un resumen de los mismos y 
 	detectar si faltan capítulos en alguna temporada o están repetidos.
 	
@@ -1381,7 +1381,8 @@ def ListaCapitulos(Serie, Ruta):
 	import glob
 	if env.SISTEMA == 'Windows':
 		env.SERIESG = ''
-		
+	if Debug:
+		Log('Empezamos con la lista de ' + Serie + ' en  ' + Ruta, Debug)
 	os.chdir(env.SERIESG + Ruta + Serie)
 	# Leemos todos los capítulos
 	lista = glob.glob('*.avi')
@@ -1549,7 +1550,7 @@ def ListaPelis(Ulti = 0, Ruta = env.HDG):
 		GuardaLibre(Ruta)
 	return
 
-def ListaSeries(Ruta=''):
+def ListaSeries(Ruta='', Debug = False):
 	""" Se encarga de generar la lista de series de un disco en concreto para después poder procesarla
 	y generar la página web correspondiente.
 	El formato de la lista es serie:comentario:Capítulos
@@ -1564,7 +1565,8 @@ def ListaSeries(Ruta=''):
 		env.SERIESG = ''
 	else:
 		etiq = 'Series_' + Ruta
-		
+	if type(Debug) == str:
+		Debug = eval(Debug)
 	if os.path.exists(env.SERIESG + Ruta + env.DIR + 'Series'):
 		# Guardamos la carpeta donde estamos
 		pop = os.getcwd()
@@ -1572,7 +1574,7 @@ def ListaSeries(Ruta=''):
 		os.chdir(env.SERIESG + Ruta + env.DIR + 'Series')
 		# Obtenemos lalista de las series
 		series = sorted(next(os.walk('.'))[1])
-		GeneraLista(etiq, series, True)
+		GeneraLista(etiq, series, True, Debug)
 		# Volvemos a la carpeta inicial
 		os.chdir(pop)
 	# Mostramos al final los capítulos que faltan
