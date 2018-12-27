@@ -318,13 +318,13 @@ class SonoffTH:
 					# En el caso de la bomba, 12 segundos por grado
 					grado = 12
 				elif self.Topico == 'placa':
-					# En el caso de la placa, partiendo de 2 kW de resistencia y 200 l de depótiso obtenemos unos 7,5 minutos
-					grado = 450
+					# En el caso de la placa, partiendo de 2 kW de resistencia y 200 l de depótiso obtenemos unos 7 minutos. 1º = 4.180 Julios x kg = 4.180 * 200 kg = 836.000 J / 2.000 W = 418 seg.
+					grado = 418
 				Tiempo = temperatura * grado
 				# Solo podemos poner un delay de máximo 6 minutos, y la placa necesita 10 minutos por grado
 				# Si está desactivada, la activamos
 				if self.Estado == 'OF':
-					Log('Activamos la ' + self.Topico + ' durante ' + str(Tiempo) + ' segundos partiendo de una temperatura de ' + str(self.Temperatura) + 'º', self.Debug)
+					Log('Activamos la ' + self.Topico + ' durante ' + str(Tiempo) + ' segundos partiendo de una temperatura de ' + str(self.Temperatura) + 'º para alcanzar los ' + str(TMin) + 'º', self.Debug)
 					if Tiempo > 360:
 						# En caso de tenerla que mantener más de 6 minutos encendida los hacemos en tramos de 6 minutos
 						for f in range(0, Tiempo // 360, 1):
@@ -1204,7 +1204,7 @@ def GuardaSeries(Ruta, deb = False):
 	# Dormimos la unidad
 	os.system('sudo hdparm -y /dev/disk/by-label/Series_' + Ruta[0] +'-' + Ruta[1])
 	# Apagamos el led
-	# os.system('/home/hector/bin/ledonoff none')
+	os.system('/home/hector/bin/ledonoff none')
 	return
 
 def JTrailer(Peli, Debug = 0):
@@ -1411,6 +1411,7 @@ def ListaCapitulos(Serie, Ruta, Debug = False):
 	# Lo convertimos a entero para usarlo en el bucle. Le restamos 1 por si la serie empieza en 0 (Piloto) para que en el bucle funcione correctamente
 	capi = int(capi) - 1
 	saltados = ''
+	repetidos = ''
 	for f in serie:
 		# Si hemos cambiado de temporada
 		if not tem == f.Temp:
@@ -1426,8 +1427,10 @@ def ListaCapitulos(Serie, Ruta, Debug = False):
 			continue
 		# Chequeamos si es un capítulo doble y nos quedamos con el último y cambiamos doble a 2 para la suma siguiente en el chequeo de si nos falta un capítulo
 		if f.Doble:
+			if Debug:
+				print(f.Todo)
 			tcapi = int(f.Capi[-2:])
-			doble = 2
+			doble = int(f.Capi[-2:]) - int(f.Capi[0:2]) + 1
 		else:
 			tcapi = int(f.Capi)
 			doble = 1
@@ -1435,20 +1438,24 @@ def ListaCapitulos(Serie, Ruta, Debug = False):
 		if not tcapi == capi + doble:
 			# Si está repetido
 			if tcapi == capi:
-				Log('Capítulo ' + tem + 'x' + str(capi) + ' de la serie %s repetido' % Serie, True)
+				#Log('Capítulo ' + tem + 'x{:02}'.format(capi) + ' de la serie %s repetido' % Serie, True)
+				repetidos = repetidos + tem + 'x{:02}, '.format(capi)
 				continue
 			# Entonces, falta, así que lo añadimos a la lista, pero hay que comprobar si hay más seguidos que faltan
 			# y hay que ponernos un límite de 24 para no seguir hasta el infinito
 			for x in range(capi + 1, 24):
-				if not int(f.Capi) == x:
+				if not tcapi == x:
 					saltados = saltados + tem + 'x{0:02d}, '.format(x)
 				else:
 					break
 		capi = tcapi
 	resumen = resumen + '{0:02d}'.format(capi)
 	if len(saltados) > 0:
-		resumen = resumen + '. Faltan= ' + saltados
+		resumen = resumen + '. Faltan = ' + saltados[:-2]
 		Log('Capítulos que faltan en ' + Serie + ': ' + saltados, True)
+	if len(repetidos) > 0:
+		resumen = resumen + '. Repetidos = ' + repetidos[:-2]
+		Log('Capítulos repetidos en ' + Serie + ': ' + saltados, True)
 	return resumen
 
 def ListaCapitulos2(Serie, Ruta):
