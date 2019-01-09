@@ -231,7 +231,8 @@ class SonoffTH:
 		# Comenzamos el bucle
 		#self.client.loop_start()
 		# Pedimos Temperatura
-		self.LeeTemperatura()
+		if not Topico == 'bomba':
+			self.LeeTemperatura()
 		# Pedimos Estado
 		self.LeeEstado()
 	
@@ -324,7 +325,7 @@ class SonoffTH:
 				# Solo podemos poner un delay de máximo 6 minutos, y la placa necesita 10 minutos por grado
 				# Si está desactivada, la activamos
 				if self.Estado == 'OF':
-					Log('Activamos la ' + self.Topico + ' durante ' + str(Tiempo) + ' segundos partiendo de una temperatura de ' + str(self.Temperatura) + 'º para alcanzar los ' + str(TMin) + 'º', self.Debug)
+					Log('Activamos la ' + self.Topico + ' durante ' + str(Tiempo / 60) + ':' + str(Tiempo // 60) + ' partiendo de una temperatura de ' + str(self.Temperatura) + 'º para alcanzar los ' + str(TMin) + 'º', self.Debug)
 					if Tiempo > 360:
 						# En caso de tenerla que mantener más de 6 minutos encendida los hacemos en tramos de 6 minutos
 						for f in range(0, Tiempo // 360, 1):
@@ -347,6 +348,9 @@ class SonoffTH:
 				# Esperamos un minuto para dar tiempo a que la temperatura en el sensor se estabilize
 				time.sleep(60)
 			Log('Terminamos el control de la ' + self.Topico + ' con una temperatura de ' + str(self.Temperatura) + 'º', self.Debug)
+			# Por si la hemos conectado manualmente
+			if self.Estado == 'ON':
+				self.MandaCurl('POWER OFF')
 		return True
 
 	def LeeEstado(self):
@@ -426,6 +430,7 @@ def BajaSeries(Batch = False, Debug = False):
 	for f in lista:
 		if not Queda(f, env.HD, ftp):
 			if Batch:
+				Log('No queda espacio para bajar ' + f)
 				continue
 			else:
 				if input('No queda espacio suficiente en ' + env.HD[0:2] + ', limpia') == 'n':
@@ -470,6 +475,7 @@ def BajaSeries(Batch = False, Debug = False):
 		# Lo descargamos en su carpeta si hay espacio
 		if not Queda(capi.Todo, env.PASADOS, ftp):
 			if Batch:
+				Log('No queda espacio para bajar ' + f)
 				continue
 			else:
 				if input('No queda espacio suficiente en ' + env.PASADOS[0:2] + ', limpia') == 'n':
@@ -490,7 +496,35 @@ def BajaSeries(Batch = False, Debug = False):
 	return
 
 def Bomba(Debug = False):
-	""" Desde aquí controlamos el funcionamiento de la bomba.
+	""" Desde aquí controlamos el funcionamiento de la bomba con el Basic sin sensor
+	"""
+	import subprocess
+	
+	if type(Debug)==str:
+		Debug = eval(Debug)
+	# Creamos las instancias
+	bomba = SonoffTH('bomba', Debug)
+	# Si está en funcionamiento salimos
+	if bomba.Estado == 'ON':
+		Log('La bomba está conectada, así que no la activamos', Debug)
+		return
+	placa = SonoffTH('placa', Debug)
+	# Pasamos el valor a una variable para poder finalizar el objeto
+	tplaca = placa.Temperatura
+	# Si el agua no está caliente, y no es de las 23 a las 6 horas, activamos la placa. Hay que pasar este valor a la clase
+	TMin = 35
+	if (tplaca < TMin and int(time.strftime('%H')) < 23 and int(time.strftime('%H')) > 5):
+		# Temporalmente, creamos un subproceso para el tema de calentar el agua de la placa sin esperar para poder lanzar la bomba, que es lo que nos interesa. Y lo lanzamos el subproceso redirigiendo la salida y los errores a la misma variable
+		sub = subprocess.Popen(['python3','/home/hector/bin/funciones.py Placa 4'],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+	# Activamos la bomba durante 60 segundos
+	bomba.Controla(1, Tiempo = 60)
+	time.sleep(61)
+	if Debug:
+		Log('El estado de la bomba después de 60 segundos es ' + bomba.LeeEstado())
+	return
+
+def BombaConSensor(Debug = False):
+	""" Desde aquí controlamos el funcionamiento de la bomba cuando tenemos sensor de temperatura. Como ahora no tenemos, simplificamos el proceso.
 	"""
 	import subprocess
 	
@@ -1093,7 +1127,7 @@ def GuardaPelis(Cuales, Que):
 		?46 en el caso de las infantiles por lo que solo mandamos el permiso de grupo, 6 o 4.
 	"""
 	# Encendemos el led
-	os.system('/home/hector/bin/ledonoff heartbeat')
+	os.system('/home/hector/bin/ledonoff disk-activity')
 	# Generamos la lista de las pelis que no se han pasado copiado rw?r?-rw-
 	# Más adelante, aprenderemos como hacer esto desde el mismo Python sin tener que recurrir al find
 	salida = os.popen("find . -type f -name '*.mkv' -perm 7" + Que + "6 -o -perm 6" + Que + "6").read()
@@ -1124,7 +1158,7 @@ def GuardaPelis(Cuales, Que):
 		os.chmod(peli, per.st_mode | stat.S_IRWXG | stat.S_IRWXO)
 		Log('Se ha copiado la película ' + peli)
 	Log('Hemos terminado de copiar las pelis HD', True)
-	#os.system('/home/hector/bin/ledonoff none')
+	os.system('/home/hector/bin/ledonoff none')
 	return
 
 def GuardaSeries(Ruta, deb = False):
@@ -1139,7 +1173,7 @@ def GuardaSeries(Ruta, deb = False):
 			os.system('sudo mount /dev/disk/by-label/Series_' + Ruta[0] +'-' + Ruta[1] + ' ' + env.SERIESG + Ruta)
 			#time.sleep(1)
 	# Encendemos el led verde para mostrar que estamos copiando
-	os.system('/home/hector/bin/ledonoff heartbeat')
+	os.system('/home/hector/bin/ledonoff disk-activity')
 	# Nos vamos a la carpeta de las Series
 	os.chdir(env.PASADOS)
 	# Generamos la lista de las series que ya han pasado por el pen y aún no han sido copiadas u+rwx
@@ -1450,10 +1484,10 @@ def ListaCapitulos(Serie, Ruta, Debug = False):
 					break
 		capi = tcapi
 	resumen = resumen + '{0:02d}'.format(capi)
-	if len(saltados) > 0:
+	if len(saltados) > 1:
 		resumen = resumen + '. Faltan = ' + saltados[:-2]
 		Log('Capítulos que faltan en ' + Serie + ': ' + saltados, True)
-	if len(repetidos) > 0:
+	if len(repetidos) > 1:
 		resumen = resumen + '. Repetidos = ' + repetidos[:-2]
 		Log('Capítulos repetidos en ' + Serie + ': ' + saltados, True)
 	return resumen
@@ -1585,7 +1619,7 @@ def ListaSeries(Ruta='', Debug = False):
 		# Volvemos a la carpeta inicial
 		os.chdir(pop)
 	# Mostramos al final los capítulos que faltan
-	os.system('cat ' + env.PLANTILLAS + etiq + '|grep Faltan')
+	os.system('grep Faltan ' + env.PLANTILLAS + etiq)
 	return
 	
 def Log(p1, imp = False, fallo = ''):
@@ -1595,7 +1629,7 @@ def Log(p1, imp = False, fallo = ''):
 	fallo mostraría la rutina que dio origen al mensaje. Faltaría automatizarlo.
 	"""
 	escri = time.strftime('%d/%m/%Y %H:%M:%S') + ' ' + fallo + p1 + '\n'
-	with open(env.LOG, 'a') as fichero:
+	with open(env.LOG, 'a', encoding='utf-8') as fichero:
 		fichero.write(escri)
 	if imp:
 		print(escri)
@@ -2079,7 +2113,7 @@ def Traspasa(Copio = 1, Monta = 1):
 		if Copio:
 			exit(1)
 	# Activamos el led verde para informar de que hemos empezado la copia
-	os.system('/home/hector/bin/ledonoff cpu0')
+	os.system('/home/hector/bin/ledonoff disk-activity')
 	# Nos pasamos a la carpeta de las series
 	os.chdir(env.SERIES)
 	# Leemos los ficheros de la carpeta

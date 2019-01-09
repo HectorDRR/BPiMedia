@@ -11,7 +11,6 @@ for /f "delims=*" %%g in ('dir \\metal\series /ad /b') do (
 		echo Creada carátula y msheet para %%g
 	)
 )
-pushd p:\pelis
 rem Nos bajamos la información de los trailers y generamos los .nfo necesarios
 if not "%1"=="" (
 	if not "%1"=="T" (
@@ -19,18 +18,17 @@ if not "%1"=="" (
 		goto lista
 	) else goto trailer
 )
-rem Quitamos el atributo a los comentarios de las pelis para que no confundan la búsqueda de películas nuevas
-attrib -a *.txt
-rem Eliminamos los comentarios de pelis que ya no estén
-for %%f in (*.txt) do if not exist "%%~nf.mkv" del "%%f"
 set nohay=0
-dir /b /aa-h >nul:
-if errorlevel 1 set /a nohay+=1
-pushd p:\cortos
-dir /b /aa-h >nul:
-if errorlevel 1 set /a nohay+=1
-echo %nohay%
-popd
+for %%g in (p:\pelis,p:\cortos,p:\Infantiles) do (
+	pushd %%g
+	rem Quitamos el atributo a los comentarios de las pelis para que no confundan la búsqueda de películas nuevas
+	attrib -a *.txt
+	rem Eliminamos los comentarios de pelis que ya no estén
+	for %%f in (*.txt) do if not exist "%%~nf.mkv" del "%%f"
+	dir /b /aa-h >nul:
+	if errorlevel 1 set /a nohay+=1
+	popd
+)
 pushd z:\
 dir /b /s /aa-h *.avi *.mkv >nul:
 if errorlevel 1 set /a nohay+=1
@@ -46,21 +44,27 @@ call e:\winutil\funciones.py ListaPelis 1
 copy e:\winutil\HD_Ultimas %temp%\Anuncio
 rem Hacemos una rutina especial para anunciar también las series, que no se están procesando correctamente
 pushd z:\
-for /d %%f in (*) do for /f "delims=*" %%g in ('dir /b /aa-h "%%f\*.avi" "%%f\*.mkv"') do echo %%g:%%f:>>%temp%\Anuncio
-popd
-rem Y otra para los cortos
-pushd p:\Cortos
-for /f "delims=*" %%g in ('dir /b /aa-h "*.avi" "*.mkv"') do echo %%g:Cortos:>>%temp%\Anuncio
+for /d %%f in (*) do for /f "delims=*" %%g in ('dir /b /aa-h "%%f\*.avi" "%%f\*.mkv" "%%f\*.mp4"') do echo %%g:%%f:>>%temp%\Anuncio
 popd
 call e:\winutil\funciones.py CreaWeb Anuncio 1
 :lista
 set no=1
+rem Generamos las listas de películas
 call e:\winutil\funciones.py ListaPelis
-copy e:\winutil\Pelis_Pelis "%temp%\Pelis"
-call e:\winutil\funciones.py CreaWeb "Pelis"
-move /y index.html j:\temp\index_old.html
-ren "p:\pelis\Pelis.html" index.html
-attrib -a index.html
+rem Las agrupamos para crear un índice general
+copy e:\winutil\Pelis_* "%temp%\Todas"
+rem Generamos el índice de cada carpeta
+for %%f in (Todas,Pelis,Cortos,Infantiles) do (
+	copy e:\winutil\Pelis_%%f "%temp%\%%f"
+	call e:\winutil\funciones.py CreaWeb %%f
+	if not %%f==Todas (
+		pushd p:\%%f
+		move /y index.html j:\temp\index_%%f_old.html
+		move "p:\pelis\%%f.html" index.html
+		attrib -a index.html
+		popd
+	)
+)
 if not "%1"=="" goto fin
 start Anuncio.html 
 start index.html
@@ -88,21 +92,25 @@ rem Después, nos bajamos las páginas y sobre la marcha extraemos la información 
 curl http://hrr.no-ip.info/Ultimas.html -o %tmp%\ulti.txt
 curl http://hrr.no-ip.info/Todas.html -o %tmp%\toda.txt
 copy %tmp%\ulti.txt + %tmp%\toda.txt %tmp%\Todas.html
-for /f "delims=*" %%f in ('dir /b /aa *.mkv') do (
-	rem Si no existen los ficheros, los creamos
-	if not exist "e:\trabajo\caratulas\%%~nf.jpg" (
-		touch "e:\trabajo\caratulas\%%~nf.jpg"
-		touch "e:\trabajo\Msheets\%%f_sheet.jpg"
+for %%g in (p:\pelis,p:\cortos,p:\Infantiles) do (
+	pushd %%g
+	for /f "delims=*" %%f in ('dir /b /aa *.mkv *.mp4 *.avi') do (
+		rem Si no existen los ficheros, los creamos
+		if not exist "e:\trabajo\caratulas\%%~nf.jpg" (
+			touch "e:\trabajo\caratulas\%%~nf.jpg"
+			touch "e:\trabajo\Msheets\%%f_sheet.jpg"
+		)
+		funciones.py JTrailer "%%f" >%tmp%\tr.txt
+		rem Lo siguiente mantiene el mismo valor de la iteraciónanterior si el fichero tr.txt está vacío
+		set /p tr=<%tmp%\tr.txt
+		if not "!tr:~0,1!"=="N" (
+			echo ^<movie^>^<trailer^>!tr:~1,-1!^</trailer^>^</movie^>>"%tmp%\NFO"
+			echo !tr:~1,-1!
+			if exist "e:\trabajo\msheets\%%f.tgmd" del "e:\trabajo\msheets\%%f.tgmd"
+			"c:\Program Files\7-Zip\7z.exe" a -tzip "e:\trabajo\msheets\%%f.tgmd" "%tmp%\NFO"
+			del "%tmp%\NFO"	
+		)
+		del %tmp%\tr.txt
 	)
-	funciones.py JTrailer "%%f" >%tmp%\tr.txt
-	rem Lo siguiente mantiene el mismo valor de la iteraciónanterior si el fichero tr.txt está vacío
-	set /p tr=<%tmp%\tr.txt
-	if not "!tr:~0,1!"=="N" (
-		echo ^<movie^>^<trailer^>!tr:~1,-1!^</trailer^>^</movie^>>"%tmp%\NFO"
-		echo !tr:~1,-1!
-		if exist "e:\trabajo\msheets\%%f.tgmd" del "e:\trabajo\msheets\%%f.tgmd"
-		"c:\Program Files\7-Zip\7z.exe" a -tzip "e:\trabajo\msheets\%%f.tgmd" "%tmp%\NFO"
-		del "%tmp%\NFO"	
-	)
-	del %tmp%\tr.txt
+	popd
 )

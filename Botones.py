@@ -22,11 +22,15 @@ def Boton_detecta(pkt):
 	"""
 	# Primero definimos las MAC de los botones que usamos. Como la función de ambos botones va a ser la misma,
 	# no diferenciaremos entre un botón y otro y las meteremos en una lista. Primero Rexel, segundo Fairy
-	MACs = ['50:f5:da:59:e4:f6','6c:56:97:ef:79:3b']
+	MACs = {'50:f5:da:59:e4:f6':'Fuera','6c:56:97:ef:79:3b':'Mío'}
+	# Para controlar a Dácil las MACs de sus equipos. Me falta la Switch y la ota tablet
+	dacil = {'d8:3c:69:e8:71:40':'Wiko','9c:e6:35:b8:b5:c7':'3DS','7c:c7:09:1f:55:05':'Tablet'}
 	if pkt[ARP].op == 1: #network request
 		if pkt[ARP].hwsrc in MACs: # Si aparece un botón llamamos a la función que se encarga del control del funcionamiento de la bomba
-			Log('Detectado botón: ' + pkt[ARP].hwsrc, Debug)
+			Log('Detectado botón: ' + MACs.get(pkt[ARP].hwsrc), Debug)
 			Bomba()
+		elif pkt[ARP].hwsrc in dacil:
+			Log('Dácil ha conectado ' + dacil.get(pkt[ARP].hwsrc) + ' a la wifi', Debug)
 	return
 
 """ Función para detectar los Dash Buttons de Amazon y controlar la bomba de recirculación de agua caliente
