@@ -514,7 +514,7 @@ def Bomba(Debug = False):
 	# Pasamos el valor a una variable para poder finalizar el objeto
 	tplaca = placa.Temperatura
 	# Si el agua no está caliente, y no es de las 23 a las 6 horas, activamos la placa. Hay que pasar este valor a la clase
-	TMin = 35
+	TMin = 40
 	if (tplaca < TMin and int(time.strftime('%H')) < 23 and int(time.strftime('%H')) > 5):
 		# Temporalmente, creamos un subproceso para el tema de calentar el agua de la placa sin esperar para poder lanzar la bomba, que es lo que nos interesa. Y lo lanzamos el subproceso redirigiendo la salida y los errores a la misma variable
 		sub = subprocess.Popen(['python3','/home/hector/bin/funciones.py Placa 4'],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -1765,7 +1765,7 @@ def Placa(Quehacemos = 4, Tiempo = 0):
 	# time.sleep(30)
 	# Creamos la instancia de la placa
 	placa = SonoffTH('placa', True)
-	if (placa.LeeTemperatura() > 35 and Quehacemos == 4):
+	if (placa.LeeTemperatura() >= 40 and Quehacemos == 4):
 		Log('La temperatura del agua está a ' + str(placa.Temperatura) + 'º, por lo que no activamos la placa', True)
 	else:
 		# En caso de control sencillo, como ya está programado en la clase lo pasamos directamente
