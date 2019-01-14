@@ -43,9 +43,7 @@ set nuevas=/aa-h
 call e:\winutil\funciones.py ListaPelis 1
 copy e:\winutil\HD_Ultimas %temp%\Anuncio
 rem Hacemos una rutina especial para anunciar también las series, que no se están procesando correctamente
-pushd z:\
 for /d %%f in (*) do for /f "delims=*" %%g in ('dir /b /aa-h "%%f\*.avi" "%%f\*.mkv" "%%f\*.mp4"') do echo %%g:%%f:>>%temp%\Anuncio
-popd
 call e:\winutil\funciones.py CreaWeb Anuncio 1
 :lista
 set no=1
@@ -66,19 +64,16 @@ for %%f in (Todas,Pelis,Cortos,Infantiles) do (
 	)
 )
 if not "%1"=="" goto fin
+pushd p:\pelis
 start Anuncio.html 
 start index.html
 "c:\Program Files (x86)\Notepad++\notepad++.exe" Anuncio.html index.html
 pause
 %deb% e:\winutil\gmailpelis.vbs
 %deb% totrash Anuncio.html *.bak
-%deb% attrib -a * /D /S
-pushd z:\
-%deb% attrib -a * /D /S
-popd
-pushd p:\cortos
-%deb% attrib -a *
-popd
+for %%f in (p:\pelis,z:\,p:\cortos,p:\infantiles) do (
+	cd /d %%f
+	%deb% attrib -a * /D /S
 :fin
 set deb=
 popd

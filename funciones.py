@@ -236,7 +236,7 @@ class SonoffTH:
 		# Pedimos Estado
 		self.LeeEstado()
 	
-	def Controla(self, Modo, TMax = 40, TMin = 35, Tiempo = 0):
+	def Controla(self, Modo, TMax = 45, TMin = 40, Tiempo = 0):
 		""" Función encargada de controlar el SonOff de la placa a través de MQTT.
 		Si Controla: 0 Paramos la placa
 					 1 Activamos manualmente con opción de tiempo para desonexión automática
@@ -250,13 +250,15 @@ class SonoffTH:
 		**Por seguridad, por si hubiera algún problema con la mulita o pérdida de conexió Wifi, procedemos a usar el comando
 		'backlog' que nos permite agrupar varios comandos en una sola orden, de manera que siempre que activemos el SonOff
 		también le mandaremos la orden de apagado con un delay en medio. De esta manera, aunque el programa o la conexión 
-		fallen nos aseguramos de que el sonfoff se desactivará tras el tiempo de 'delay' enviado, que es un máximo de 6 minutos
+		fallen nos aseguramos de que el sonfoff se desactivará tras el tiempo de 'delay' enviado, que es un máximo de 6 minutos.
 		
 		Tiempo: Por ahora, solo lo aplicamos al control manual de encendido. Si es >0 damos la orden de encender 
-		durante ese tiempo y después apagar
+		durante ese tiempo y después apagar.
 		
-		*Pendiente implementar el control automático con tiempos tanto para la placa como para la bomba dentro de la clase
-		Elevar 1º en la placa puede suponer unos 10 minutos, mientras que en la bomba es menos
+		Pendiente elevar la temperatura mínima dependiendo de la época del año. Hemos visto que en verano con 35º es suficiente 
+		para ducharnos los 3, pero en invierno, como el agua que entra en el depósito está mucho más fría, la caída de temperatura 
+		es mucho mayor en menos tiempo, por lo que pasamos a subirlo a 40º. Tendremos que encontrar una referencia externa para poder 
+		variar esa consigna de manera automática.
 		"""
 		# En caso de pasarlo desde línea de comando como string, lo pasamos a int. Si ya viene como int no pasa nada
 		Modo = int(Modo)
