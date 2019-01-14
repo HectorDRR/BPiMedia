@@ -1977,7 +1977,7 @@ def Temperatura(Cada = 2, Cual = 'Temperatura'):
 	# Obtenemos la fecha de ayer para sacar los de las últimas 24 horas
 	fecha = datetime.datetime.now()
 	# Obtenemos cuantos minutso ha estado encedida la placa este mes
-	Activo = list(cursor.execute("select count(Encendido) from placa where encendido=1 and fecha>'" + str(fecha.year) + "-" + str(fecha.month) + "-00'"))[0][0]
+	Activo = list(cursor.execute("select count(Encendido)*5 from placa where encendido=1 and fecha>'" + str(fecha.year) + "-" + fecha.strftime('%m') + "-00'"))[0][0]
 	fecha = fecha - datetime.timedelta(days = 1, minutes = 10)
 	datos = cursor.execute("Select * From placa Where Fecha > '" + fecha.strftime('%Y-%m-%d %H:%M') + "'")
 	Temperatura_CreaWeb(datos, Cada, Cual, Activo)
@@ -2005,7 +2005,7 @@ def Temperatura_CreaWeb(Datos, Cada = 2, Cual = 'Temperatura', Activo = 0):
 		for f in range(0,25,1):
 			file.writelines(planti[f] + '\n')
 		# Pasamos el valor de los minutos que ha estado activa la placa este mes
-		file.writelines(' ' * 28 + 'conectada: ' + str(Activo * 5) + ',\n')
+		file.writelines(' ' * 28 + 'conectada: ' + str(Activo) + ',\n')
 		# Escribimos el comienzo de los datos
 		file.writelines(' ' * 28 + 'dataPoints: [')
 		cont = 0
