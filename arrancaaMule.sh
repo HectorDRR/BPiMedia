@@ -43,4 +43,10 @@ if [ $? -eq 1 ]
 		echo $(date) VSFTPD parado, lo arrancamos de nuevo>>/tmp/mulacaida.txt
 		sudo service vsftpd start
 fi
-
+# Comprobamos el noip2
+pgrep noip
+if [ $? -eq 1 ]
+	then
+		echo $(date) NOIP2 parado, lo arrancamos de nuevo>>/tmp/mulacaida.txt
+		sudo noip2
+fi

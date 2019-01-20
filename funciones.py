@@ -785,7 +785,7 @@ def CopiaNuevas(Pen):
 			os.system('attrib +a "' + env.HD + f + '"')
 	return
 	
-def CreaWeb(p1 = 'Ultimas', Pocas = 0):
+def CreaWeb(p1 = 'Ultimas', Pocas = 0, Debug = False):
 	""" Se encarga de generar las distintas páginas web necesarios para la gestión de las películas y las series.
 	El fichero html estará en env.PLANTILLAS con el mismo nombre que la plantilla.
 	Se habilita una opción especial para cuando estamos en el curro que también anunciamos series
@@ -795,6 +795,8 @@ def CreaWeb(p1 = 'Ultimas', Pocas = 0):
 	"""
 	import codecs
 	
+	if type(Debug) == str:
+		Debug = True
 	if type(Pocas) == str:
 		Pocas = True
 	# En caso de crear la página de Series
@@ -902,23 +904,28 @@ def CreaWeb(p1 = 'Ultimas', Pocas = 0):
 				ser = 's'
 		# Si trabajamos con series dejamos el título tal cual, en caso de pelis, quitamos la extensión para buscar la carátula
 		# Nos falta ver como tratar las pelis en carpetas (Blu-Ray)
-		if ser:
-			titulo = peli + '.'
-		else:
-			titulo = peli[:-3]
+		titulo = peli
+		# Si es una peli, quitamos la extensión. Si es una carpeta, por ejemplo de un documental, no hacemos nada.
+		if peli[-4] == '.':
+			titulo = peli[:-4]
 		# Chequeamos si hay carátula. Asumimos que si no hay carátula tampoco hay Msheet
-		if os.path.exists(env.MM + ser + 'caratulas/' + titulo + 'jpg'):
+		if Debug:
+			print(env.MM + ser + 'caratulas/' + titulo + '.jpg')
+		if os.path.exists(env.MM + ser + 'caratulas/' + titulo + '.jpg'):
 			if Pocas:
-				caratula = ' title="' + disco + ':' + comen + '"><img src="' + url + ser + 'caratulas/' + titulo + 'jpg" \\'
+				caratula = '<img src="' + url + ser + 'caratulas/' + titulo + '.jpg" \\'
 			else:
-				caratula = ' class="hover-lib" id="' + url + ser + 'caratulas/' + titulo + 'jpg" title="' + disco + ':' + comen + '" '
-		else:
-			cfaltan.append(peli)				
-		# Chequeamos si hay Msheet
-		if os.path.exists(env.MM + ser + 'Msheets/' + peli + '_sheet.jpg'):
-			linpeli = '<a href="' + url + ser + 'Msheets/' + peli + '_sheet.jpg" target="_Sheet"' + caratula + '>'
+				caratula = ' class="hover-lib" id="' + url + ser + 'caratulas/' + titulo + '.jpg" title="' + disco + ':' + comen + '" '
 			termina = '</a>'
 		else:
+			cfaltan.append(peli)
+		if Debug:
+			print(caratula)
+		# Chequeamos si hay Msheet
+		if os.path.exists(env.MM + ser + 'Msheets/' + peli + '_sheet.jpg'):
+			linpeli = '<a href="' + url + ser + 'Msheets/' + peli + '_sheet.jpg" target="_Sheet" title="' + disco + ':' + comen + '">' + caratula + '>'
+		elif not caratula == '' :
+			linpeli = '<a href="#" title="' + disco + ':' + comen + '">' + caratula + '></a>'
 			mfaltan.append(peli)
 		# Modificamos para no buscar el trailer en las series, ya que la mayoría no tienen y solo generamos basura en el log
 		if ser != 's':
