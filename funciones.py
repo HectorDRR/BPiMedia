@@ -516,8 +516,11 @@ def Bomba(Debug = False):
 	# Si el agua no está caliente, y no es de las 23 a las 6 horas, activamos la placa. Hay que pasar este valor a la clase
 	TMin = 40
 	if (tplaca < TMin and int(time.strftime('%H')) < 23 and int(time.strftime('%H')) > 5):
-		# Temporalmente, creamos un subproceso para el tema de calentar el agua de la placa sin esperar para poder lanzar la bomba, que es lo que nos interesa. Y lo lanzamos el subproceso redirigiendo la salida y los errores a la misma variable
-		sub = subprocess.Popen(['python3','/home/hector/bin/funciones.py Placa 4'],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+		# Comprobamos si está corriendo ya el control de la placa. En caso de que no lo esté solo devolverá 1 proceso. Si lo está devuelve 3 en caso de que se haya lanzado por el cron, lo más habitual
+		proceso = list(os.popen('pgrep -af Placa'))
+		if len(proceso) == 1:
+			# Temporalmente, creamos un subproceso para el tema de calentar el agua de la placa sin esperar para poder lanzar la bomba, que es lo que nos interesa. Y lo lanzamos el subproceso redirigiendo la salida y los errores a la misma variable
+			sub = subprocess.Popen(['python3','/home/hector/bin/funciones.py Placa 4'],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 	# Activamos la bomba durante 60 segundos
 	bomba.Controla(1, Tiempo = 60)
 	time.sleep(61)
@@ -906,16 +909,17 @@ def CreaWeb(p1 = 'Ultimas', Pocas = 0, Debug = False):
 		# Nos falta ver como tratar las pelis en carpetas (Blu-Ray)
 		titulo = peli
 		# Si es una peli, quitamos la extensión. Si es una carpeta, por ejemplo de un documental, no hacemos nada.
-		if peli[-4] == '.':
-			titulo = peli[:-4]
+		if not ser == 's':
+			if peli[-4] == '.':
+				titulo = peli[:-4]
 		# Chequeamos si hay carátula. Asumimos que si no hay carátula tampoco hay Msheet
 		if Debug:
 			print(env.MM + ser + 'caratulas/' + titulo + '.jpg')
 		if os.path.exists(env.MM + ser + 'caratulas/' + titulo + '.jpg'):
 			if Pocas:
-				caratula = '<img src="' + url + ser + 'caratulas/' + titulo + '.jpg" \\'
+				caratula = '><img src="' + url + ser + 'caratulas/' + titulo + '.jpg" \\'
 			else:
-				caratula = ' class="hover-lib" id="' + url + ser + 'caratulas/' + titulo + '.jpg" title="' + disco + ':' + comen + '" '
+				caratula = 'class="hover-lib" id="' + url + ser + 'caratulas/' + titulo + '.jpg" title="' + disco + ':' + comen + '" '
 			termina = '</a>'
 		else:
 			cfaltan.append(peli)
@@ -923,8 +927,8 @@ def CreaWeb(p1 = 'Ultimas', Pocas = 0, Debug = False):
 			print(caratula)
 		# Chequeamos si hay Msheet
 		if os.path.exists(env.MM + ser + 'Msheets/' + peli + '_sheet.jpg'):
-			linpeli = '<a href="' + url + ser + 'Msheets/' + peli + '_sheet.jpg" target="_Sheet" title="' + disco + ':' + comen + '">' + caratula + '>'
-		elif not caratula == '' :
+			linpeli = '<a href="' + url + ser + 'Msheets/' + peli + '_sheet.jpg" target="_Sheet" title="' + disco + ':' + comen + '" ' + caratula + '>'
+		elif caratula != '' :
 			linpeli = '<a href="#" title="' + disco + ':' + comen + '">' + caratula + '></a>'
 			mfaltan.append(peli)
 		# Modificamos para no buscar el trailer en las series, ya que la mayoría no tienen y solo generamos basura en el log
@@ -1685,13 +1689,15 @@ def Para():
 	for f in (range(1,len(sys.argv))):
 		print(str(f) + ': ' + sys.argv[f])
 
-def PasaaBD(Fichero = '/var/log/placa.log'):
+def PasaaBD(Fichero = '/var/log/placa.log', Debug = False):
 	""" Esta función pasa a una Base de Datos en sqlite3 la información de la placa solar y la bomba obtenida a través del MQTT
 	y volcada en /var/log/placa.log. Una vez renombramos el fichero, pasamos los datos, y los archivamos en un zip.
 	Nos falta también almacenar los de la Bomba, si es que nos interesa de alguna manera.
 	"""
 	import sqlite3
 	
+	if type(Debug) == str:
+		Debug = eval(Debug)
 	# Confirmamos que existe el fichero placa.log
 	if not os.path.exists(Fichero):
 		Log('No hay nada que importar de la placa')
@@ -1713,8 +1719,10 @@ def PasaaBD(Fichero = '/var/log/placa.log'):
 		Fichero = 'placa_' + hora + '.log'
 	else:
 		esotro = True
-	# Cargamos los datos de la placa. Idealmente, deberíamos hacer la criba nosotros y no a través del grep
-	Datos = list(filter(None,os.popen('grep -e placa/SENSOR -e placa/STATE ' + Fichero + ' --color=none').read().split('\n')))
+	# Cargamos los datos de la placa. Idealmente, deberíamos hacer la criba nosotros y no a través del grep. Modificamos el grep debido al que al quitarle el soporte de MQTT al Tasmota cambia la línea de log
+	Datos = list(filter(None,os.popen("grep -E 'placa.*SENSOR|placa.*STATE' " + Fichero + ' --color=none').read().split('\n')))
+	if Debug:
+		print(Datos)
 	Encendido = -1
 	Temperatura = 0.0
 	contador = 0
@@ -1764,12 +1772,14 @@ def Placa(Quehacemos = 4, Tiempo = 0):
 	# Si solo queremos apagar, mandamos el comando por curl y evitamos la inicialización de la clase
 	if Quehacemos == 0:
 		return MandaCurl('http://placa/cm?cmnd=Power%20Off')
-	# Creamos la instancia de la bomba
-	# bomba = SonoffTH('bomba', True)
-	# Activamos la bomba 10 segundos para que el agua llegue a la sonda en la tubería y la caliente
-	# bomba.Controla(1, Tiempo = 10)
-	# Esperamos 30 segundos para que coja temperatura el sensor
-	# time.sleep(30)
+	if Quehacemos == 4:
+		# Comprobamos si está corriendo ya el control de la placa. En caso de que no lo esté solo devolverá 3 procesos: el bash que lanza el cron, el de Botones y el pgrep
+		# Si lo está devuelve 4 en caso de que se haya lanzado por el cron, lo más habitual
+		proceso = list(os.popen('pgrep -af Placa'))
+		print(proceso)
+		if len(proceso) > 3:
+			Log('Ya está corriendo el proceso de control de la Placa, por lo que salimos')
+			return
 	# Creamos la instancia de la placa
 	placa = SonoffTH('placa', True)
 	if (placa.LeeTemperatura() >= 40 and Quehacemos == 4):
