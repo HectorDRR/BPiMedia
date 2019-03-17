@@ -316,18 +316,18 @@ class SonoffTH:
 					return False
 				# Calculamos el tiempo necesario para llegar a la temperatura deseada. Primero obtenemos los grados de diferencia
 				temperatura = TMin - self.Temperatura
-				# En base al tipo de instalación, definimos el coeficiente de tiempo por cada grado
-				if self.Topico == 'bomba':
+				# En base al tipo de instalación, definimos el coeficiente de tiempo por cada grado. Suprimimos el de la bomba puesto que lo ponemos un tiempo fijo
+				#if self.Topico == 'bomba':
 					# En el caso de la bomba, 12 segundos por grado
-					grado = 12
-				elif self.Topico == 'placa':
+				#	grado = 12
+				if self.Topico == 'placa':
 					# En el caso de la placa, partiendo de 2 kW de resistencia y 200 l de depótiso obtenemos unos 7 minutos. 1º = 4.180 Julios x kg = 4.180 * 200 kg = 836.000 J / 2.000 W = 418 seg.
 					grado = 418
 				Tiempo = temperatura * grado
 				# Solo podemos poner un delay de máximo 6 minutos, y la placa necesita 10 minutos por grado
 				# Si está desactivada, la activamos
 				if self.Estado == 'OF':
-					Log('Activamos la ' + self.Topico + ' durante ' + str(Tiempo / 60) + ':' + str(Tiempo // 60) + ' partiendo de una temperatura de ' + str(self.Temperatura) + 'º para alcanzar los ' + str(TMin) + 'º', self.Debug)
+					Log('Activamos la ' + self.Topico + ' durante ' + str(Tiempo // 60) + ':' + '{:0>2d} '.format(Tiempo % 60) + 'partiendo de una temperatura de ' + str(self.Temperatura) + 'º para alcanzar los ' + str(TMin) + 'º', self.Debug)
 					if Tiempo > 360:
 						# En caso de tenerla que mantener más de 6 minutos encendida los hacemos en tramos de 6 minutos
 						for f in range(0, Tiempo // 360, 1):
@@ -385,15 +385,19 @@ class SonoffTH:
 		return self.Temperatura
 
 	def MandaCurl(self, Comando):
-		import pycurl
-		from io import BytesIO
-		buffer = BytesIO()
-		c = pycurl.Curl()
-		c.setopt(c.URL, 'http://' + self.Topico + '/cm?cmnd=' + Comando.replace(' ','%20'))
-		c.setopt(c.WRITEDATA, buffer)
-		c.perform()
-		c.close()
-		return buffer.getvalue().decode()
+		#import pycurl
+		#from io import BytesIO
+		#buffer = BytesIO()
+		#c = pycurl.Curl()
+		#c.setopt(c.URL, 'http://' + self.Topico + '/cm?cmnd=' + Comando.replace(' ','%20'))
+		#c.setopt(c.WRITEDATA, buffer)
+		#c.perform()
+		#c.close()
+		#return buffer.getvalue().decode()
+		# Debido a los problemas para istalar el PyCurl en el Odroid lo hacemos a través de una llamada al sistema
+		respuesta = os.popen('curl -s "http://' + self.Topico + '/cm?cmnd=' + Comando.replace(' ','%20')+'"').read()
+		#Log('MandaCurl: ' + Comando, True)
+		return respuesta
 		
 def BajaSeries(Batch = False, Debug = False):
 	""" Se conecta por FTP a la mula para comprobar si hay nuevos capítulos de las series que tenemos
@@ -1140,7 +1144,7 @@ def GuardaPelis(Cuales, Que):
 		?46 en el caso de las infantiles por lo que solo mandamos el permiso de grupo, 6 o 4.
 	"""
 	# Encendemos el led
-	os.system('/home/hector/bin/ledonoff disk-activity')
+	os.system('/home/hector/bin/ledonoff heartbeat')
 	# Generamos la lista de las pelis que no se han pasado copiado rw?r?-rw-
 	# Más adelante, aprenderemos como hacer esto desde el mismo Python sin tener que recurrir al find
 	salida = os.popen("find . -type f -name '*.mkv' -perm 7" + Que + "6 -o -perm 6" + Que + "6").read()
@@ -1180,13 +1184,15 @@ def GuardaSeries(Ruta, deb = False):
 		no haga efecto sino muestre lo que va a hacer
 	"""
 	lista = []
+	cuantos = 0
 	Log('Comenzamos la copia de las Series ' + Ruta, True)
 	# Confirmamos que está montado el disco de destino, y si no, lo montamos usando el by-label por los problemas con el Stretch y el fstab
-	while not os.path.exists(env.SERIESG + Ruta + '/Series/'):
+	while not os.path.exists(env.SERIESG + Ruta + '/Series/') and cuantos < 5:
 			os.system('sudo mount /dev/disk/by-label/Series_' + Ruta[0] +'-' + Ruta[1] + ' ' + env.SERIESG + Ruta)
-			#time.sleep(1)
+			time.sleep(1)
+			cuantos += 1
 	# Encendemos el led verde para mostrar que estamos copiando
-	os.system('/home/hector/bin/ledonoff disk-activity')
+	os.system('/home/hector/bin/ledonoff heartbeat')
 	# Nos vamos a la carpeta de las Series
 	os.chdir(env.PASADOS)
 	# Generamos la lista de las series que ya han pasado por el pen y aún no han sido copiadas u+rwx
@@ -1247,7 +1253,7 @@ def GuardaSeries(Ruta, deb = False):
 	ListaSeries(Ruta)
 	CreaWeb('Series')
 	# Desmontamos la unidad
-	os.system('sync &&sudo umount ' + env.SERIESG + Ruta)
+	os.system('sync &&sudo umount /dev/disk/by-label/Series_' + Ruta[0] +'-' + Ruta[1])
 	# Dormimos la unidad
 	os.system('sudo hdparm -y /dev/disk/by-label/Series_' + Ruta[0] +'-' + Ruta[1])
 	# Apagamos el led
@@ -1649,15 +1655,17 @@ def Log(p1, imp = False, fallo = ''):
 	return
 
 def MandaCurl(URL):
-	import pycurl
-	from io import BytesIO
-	buffer = BytesIO()
-	c = pycurl.Curl()
-	c.setopt(c.URL, URL)
-	c.setopt(c.WRITEDATA, buffer)
-	c.perform()
-	c.close()
-	return buffer.getvalue().decode()
+	#import pycurl
+	#from io import BytesIO
+	#buffer = BytesIO()
+	#c = pycurl.Curl()
+	#c.setopt(c.URL, URL)
+	#c.setopt(c.WRITEDATA, buffer)
+	#c.perform()
+	#c.close()
+	#return buffer.getvalue().decode()
+	respuesta = os.popen('curl -s ' + URL).read()
+	return respuesta
 	
 def ObtenLista(Ulti = 0):
 	""" Mini función para obtener las películas de una carpeta determinada.

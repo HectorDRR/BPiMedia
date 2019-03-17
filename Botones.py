@@ -8,11 +8,11 @@ Se requiere de una segunda función, Boton_detecta, que es la que se dispara cua
 # Importamos la librería kamene que es la version de scapy con compatibilidad con Python3
 from kamene.all import *
 from funciones import SonoffTH, Bomba, Log
-import datetime, sys
+import datetime, sys, os
 
 # Definición de variables para hacer la macro portable entre distintas configuraciones/plataformas
 env = __import__('Entorno_' + sys.platform)
-Debug = False
+
 # Para no repetir botón en un corto periodo de tiempo o log de conexión de equipo de Dácil
 ultimo = ['',datetime.datetime.now()]
 
@@ -28,20 +28,24 @@ def Boton_detecta(pkt):
 		if pkt[ARP].hwsrc in MACs: # Si aparece un botón llamamos a la función que se encarga del control del funcionamiento de la bomba
 			Log('Detectado botón: ' + MACs.get(pkt[ARP].hwsrc), Debug)
 			Bomba()
-		# Algunos dispositivos parecen lanzar varios mensajes, por lo que descartamos mensajes repetidos guardando MAC y hora y 
-		# viendo si es repetido en los últimos 3 segundos
-		elif (pkt[ARP].hwsrc in dacil and not pkt[ARP].hwsrc == ultimo[0] and ultimo[1] > datetime.datetime.now() - datetime.timedelta(seconds = 3)):
-			Log('Dácil ha conectado ' + dacil.get(pkt[ARP].hwsrc) + ' a la wifi', Debug)
+		# Algunos dispositivos parecen lanzar varios mensajes, por lo que descartamos mensajes repetidos 
+		# viendo si es repetido en la última línea del log
+		elif pkt[ARP].hwsrc in dacil:
+			if os.system('tail -1 ' + env.LOG + '|grep ' + dacil.get(pkt[ARP].hwsrc)) > 0:
+				Log('Dácil ha conectado ' + dacil.get(pkt[ARP].hwsrc) + ' a la wifi', Debug)
+		# Para comprobar hacemos que genere un log de cada máquina que pida IP
+		if Debug:
+			Log('Se ha conectado la MAC ' + pkt[ARP].hwsrc, Debug)
 	return
 
 if __name__ == "__main__":
-	""" En caso de que se ejecute desde la línea de comando, llamamos a la función dada como parámetro 1
+	""" En caso de que haya un parámetro activamos el debugging
 	"""
 	if len(sys.argv) == 2:
-		Bomba('Manual')
-		exit(0)
+		Debug = True
 	else:
-		# Lanzamos el bucle que se queda detectando las llamadas ARP. Este funcionará de manera ininterrumpida
-		# Hay que lanzarlo con el arranque del equipo. 
-		# Plantear su instalación en el router en vez de la mulita
-		sniff(prn=Boton_detecta, filter="arp", store=0)
+		Debug = False
+	# Lanzamos el bucle que se queda detectando las llamadas ARP. Este funcionará de manera ininterrumpida
+	# Hay que lanzarlo con el arranque del equipo. 
+	# Plantear su instalación en el router en vez de la mulita
+	sniff(prn=Boton_detecta, filter="arp", store=0)

@@ -4,30 +4,30 @@ pgrep transmission-da
 if [ $? -eq 1 ]
 	then
 		echo $(date) transmission cascado, lo arrancamos de nuevo>>/tmp/mulacaida.txt
-		transmission-daemon -g /mnt/e/torrents/
+		#transmission-daemon -g /mnt/e/torrents/
+		sudo service transmission-daemon start
 		sleep 2
-		exit
 fi
 pgrep amuled
 if [ $? -eq 1 ]
 	then
 		echo $(date) aMule cascado, lo arrancamos de nuevo>>/tmp/mulacaida.txt
-		pkill -9 amule
-		rm /mnt/e/.aMule/shareddir.dat
-		amuled -c /mnt/e/.aMule/ -f
-		sleep 10
-		compartidos
-		exit
+		#pkill -9 amule
+		#rm /mnt/e/.aMule/shareddir.dat
+		#amuled -c /mnt/e/.aMule/ -f
+		sudo service amule-daemon restart
+		#sleep 10
+		#compartidos
 fi
 # Si no es eso, chequeamos si se ha cerrado solo
 tail -1 /mnt/e/.aMule/logfile|grep -e 'Todos los archivos' -e 'All PartFiles' -e 'Asio Sockets'
 if [ $? -eq 0 ]
 	then
 		echo $(date) aMule parado, lo arrancamos de nuevo>>/tmp/mulacaida.txt
-		#sudo service amule-daemon stop
-		#sudo service amule-daemon start
-		pkill -9 amule
-		amuled -c /mnt/e/.aMule/ -f
+		sudo service amule-daemon stop
+		sudo service amule-daemon start
+		#pkill -9 amule
+		#amuled -c /mnt/e/.aMule/ -f
 fi
 # Comprobamos también si está vivo el proceso del boton
 pgrep python3
@@ -55,5 +55,6 @@ pgrep minidlna
 if [ $? -eq 1 ]
 	then
 		echo $(date) Minidlnad parado, lo arrancamos de nuevo>>/tmp/mulacaida.txt
-		minidlnad
+		#/usr/local/sbin/minidlnad
+		sudo service minidlnad start
 fi

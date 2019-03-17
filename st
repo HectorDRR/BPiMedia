@@ -43,7 +43,7 @@ read p
 tail -20 /mnt/e/.aMule/logfile
 echo El log del Transmission
 read p
-sudo grep transmission /var/log/daemon.log|tail -30
+sudo grep transmission /var/log/syslog|tail -30
 echo El log del minidlna y del traspasa
 read p
 tail -15 /mnt/e/.mini/minidlna.log
