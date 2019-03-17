@@ -50,3 +50,10 @@ if [ $? -eq 1 ]
 		echo $(date) NOIP2 parado, lo arrancamos de nuevo>>/tmp/mulacaida.txt
 		sudo noip2
 fi
+# Comprobamos el Minidlna
+pgrep minidlna
+if [ $? -eq 1 ]
+	then
+		echo $(date) Minidlnad parado, lo arrancamos de nuevo>>/tmp/mulacaida.txt
+		minidlnad
+fi
