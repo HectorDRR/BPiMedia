@@ -504,7 +504,6 @@ def BajaSeries(Batch = False, Debug = False):
 def Bomba(Debug = False):
 	""" Desde aquí controlamos el funcionamiento de la bomba con el Basic sin sensor
 	"""
-	import subprocess
 	
 	if type(Debug)==str:
 		Debug = eval(Debug)
@@ -514,22 +513,16 @@ def Bomba(Debug = False):
 	if bomba.Estado == 'ON':
 		Log('La bomba está conectada, así que no la activamos', Debug)
 		return
-	placa = SonoffTH('placa', Debug)
-	# Pasamos el valor a una variable para poder finalizar el objeto
-	tplaca = placa.Temperatura
-	# Si el agua no está caliente, y no es de las 23 a las 6 horas, activamos la placa. Hay que pasar este valor a la clase
-	TMin = 40
-	if (tplaca < TMin and int(time.strftime('%H')) < 23 and int(time.strftime('%H')) > 5):
-		# Comprobamos si está corriendo ya el control de la placa. En caso de que no lo esté solo devolverá 1 proceso. Si lo está devuelve 3 en caso de que se haya lanzado por el cron, lo más habitual
-		proceso = list(os.popen('pgrep -af Placa'))
-		if len(proceso) == 1:
-			# Temporalmente, creamos un subproceso para el tema de calentar el agua de la placa sin esperar para poder lanzar la bomba, que es lo que nos interesa. Y lo lanzamos el subproceso redirigiendo la salida y los errores a la misma variable
-			sub = subprocess.Popen(['python3','/home/hector/bin/funciones.py Placa 4'],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 	# Activamos la bomba durante 60 segundos
 	bomba.Controla(1, Tiempo = 60)
 	time.sleep(61)
 	if Debug:
 		Log('El estado de la bomba después de 60 segundos es ' + bomba.LeeEstado())
+	placa = SonoffTH('placa', Debug)
+	# Si el agua no está caliente, y no es de las 23 a las 6 horas, activamos la placa. Hay que pasar este valor a la clase
+	TMin = 40
+	if (placa.Temperatura < TMin and int(time.strftime('%H')) < 23 and int(time.strftime('%H')) > 5):
+		Placa(4)
 	return
 
 def BombaConSensor(Debug = False):

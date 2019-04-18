@@ -12,7 +12,7 @@ pgrep amuled
 if [ $? -eq 1 ]
 	then
 		echo $(date) aMule cascado, lo arrancamos de nuevo>>/tmp/mulacaida.txt
-		#pkill -9 amule
+		pkill -9 amule
 		#rm /mnt/e/.aMule/shareddir.dat
 		#amuled -c /mnt/e/.aMule/ -f
 		sudo service amule-daemon restart
