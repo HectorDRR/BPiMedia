@@ -55,6 +55,6 @@ pgrep minidlna
 if [ $? -eq 1 ]
 	then
 		echo $(date) Minidlnad parado, lo arrancamos de nuevo>>/tmp/mulacaida.txt
-		#/usr/local/sbin/minidlnad
-		sudo service minidlnad start
+		/usr/local/sbin/minidlnad
+		#sudo service minidlnad start
 fi

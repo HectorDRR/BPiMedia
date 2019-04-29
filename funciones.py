@@ -513,9 +513,9 @@ def Bomba(Debug = False):
 	if bomba.Estado == 'ON':
 		Log('La bomba está conectada, así que no la activamos', Debug)
 		return
-	# Activamos la bomba durante 60 segundos
-	bomba.Controla(1, Tiempo = 60)
-	time.sleep(61)
+	# Activamos la bomba durante 90 segundos
+	bomba.Controla(1, Tiempo = 90)
+	time.sleep(91)
 	if Debug:
 		Log('El estado de la bomba después de 60 segundos es ' + bomba.LeeEstado())
 	placa = SonoffTH('placa', Debug)
@@ -1499,7 +1499,7 @@ def ListaCapitulos(Serie, Ruta, Debug = False):
 	if len(saltados) > 1:
 		resumen = resumen + '. Faltan = ' + saltados[:-2]
 		Log('Capítulos que faltan en ' + Serie + ': ' + saltados, True)
-	if len(repetidos) > 1:
+	if len(repetidos) > 2:
 		resumen = resumen + '. Repetidos = ' + repetidos[:-2]
 		Log('Capítulos repetidos en ' + Serie + ': ' + saltados, True)
 	return resumen
@@ -1625,7 +1625,7 @@ def ListaSeries(Ruta='', Debug = False):
 		pop = os.getcwd()
 		# Nos vamos a la carpeta raíz de las series
 		os.chdir(env.SERIESG + Ruta + env.DIR + 'Series')
-		# Obtenemos lalista de las series
+		# Obtenemos la lista de las series
 		series = sorted(next(os.walk('.'))[1])
 		GeneraLista(etiq, series, True, Debug)
 		# Volvemos a la carpeta inicial
