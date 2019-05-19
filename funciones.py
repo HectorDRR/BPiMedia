@@ -1499,9 +1499,9 @@ def ListaCapitulos(Serie, Ruta, Debug = False):
 	if len(saltados) > 1:
 		resumen = resumen + '. Faltan = ' + saltados[:-2]
 		Log('Capítulos que faltan en ' + Serie + ': ' + saltados, True)
-	if len(repetidos) > 2:
+	if len(repetidos) > 1:
 		resumen = resumen + '. Repetidos = ' + repetidos[:-2]
-		Log('Capítulos repetidos en ' + Serie + ': ' + saltados, True)
+		Log('Capítulos repetidos en ' + Serie + ': ' + repetidos, True)
 	return resumen
 
 def ListaCapitulos2(Serie, Ruta):
@@ -2125,15 +2125,14 @@ def Traspasa(Copio = 1, Monta = 1):
 	Monta = int(Monta)
 	copiado = 0
 	# Por si nos hemos despistado, montamos el pen-drive. Lo hacemos por etiqueta para así poder usar cualquiera
-	if not os.path.exists(env.PENTEMP + 'Series'):
+	if Copio and not os.path.exists(env.PENTEMP + 'Series'):
 		os.system('sudo mount /dev/disk/by-label/Hector-HD64 /media')
-	#Si no está montado el pendrive, salimos
-	if not os.path.exists(env.PENTEMP + 'Series'):
-		Log('No esta montado el pendrive', True)
-		if Copio:
-			exit(1)
+		#Si no está montado el pendrive, salimos
+		if not os.path.exists(env.PENTEMP + 'Series'):
+			Log('No esta montado el pendrive', True)
+			return
 	# Activamos el led verde para informar de que hemos empezado la copia
-	os.system('/home/hector/bin/ledonoff disk-activity')
+	os.system('/home/hector/bin/ledonoff heartbeat')
 	# Nos pasamos a la carpeta de las series
 	os.chdir(env.SERIES)
 	# Leemos los ficheros de la carpeta
@@ -2204,49 +2203,51 @@ def Traspasa(Copio = 1, Monta = 1):
 	# que lo que antes estaba en Series ahora está en pasados y si se han creados nuevas carpetas
 	if copiado:
 		os.system("/home/hector/bin/compartidos")
-	# Nos pasamos a la carpeta de las pelis
-	os.chdir(env.HD)
-	filenames = next(os.walk('.'))[2]
-	for f in filenames:
-		if (not os.access(f,os.X_OK) and not f[-4:]=='part' and not f[-3:]=='jpg'):
-			f = Limpia(f)
-			Log('Copiamos la peli ' + f, True)
-			# Comprobamos si hay espacio suficiente
-			if not Queda(f, env.PENTEMP + 'Pelis'):
-				continue
-			# Copiamos el fichero
-			try:
-				shutil.copy(f,env.PENTEMP + 'Pelis')
-			except OSError as e:
-				Log('Ha ocurrido un error al copiar el fichero al pen ' + e.strerror, True)
-				continue
-			except IOError as e:
-				Log('Ha ocurrido un error al copiar el fichero al pen ' + e.strerror, True)
-				continue
-			# Obtenemos los atributos actuales
-			per = os.stat(f)
-			# Y le añadimos 'x' al usuario para marcarla como pasada al Pen. 
-			# Con el '|' hacemos un OR entre los permisos actuales y el que le queremos añadir
-			os.chmod(f, per.st_mode | stat.S_IXUSR)
-			copiado = 1
-	# Si hay películas nuevas, generamos la página de Últimas. CreaWeb se encarga de cambiar los permisos de los jpg
-	if len(os.popen("find . -perm 744 -name '*.jpg'").read()) > 0:
-		CreaWeb('Ultimas')
-		# Y limpiamos la carpeta de .jpg innecesarios
-		LimpiaHD()
-	salta = 0
-	# Desmontamos el pen porque cuando lo cogemos por la mañana no sabemos si se ha copiado algo o no a no ser que especifiquemos lo contrario
-	if Monta:
-		while True:
-			if os.system('sudo umount /media') == 0:
-				break
-			else:
-				time.sleep(5)
-				salta += 1
-				# Lo intentamos 5 veces, si no lo conseguimos, sacamos el error y terminamos
-				if salta == 5:
-					Log('Hubo un problema desmontando el Pen')
+	#En caso de que solo procesemos lo que tenemos acumulado, prescindimos de procesar las pelis
+	if Copio:
+		# Nos pasamos a la carpeta de las pelis
+		os.chdir(env.HD)
+		filenames = next(os.walk('.'))[2]
+		for f in filenames:
+			if (not os.access(f,os.X_OK) and not f[-4:]=='part' and not f[-3:]=='jpg'):
+				f = Limpia(f)
+				Log('Copiamos la peli ' + f, True)
+				# Comprobamos si hay espacio suficiente
+				if not Queda(f, env.PENTEMP + 'Pelis'):
+					continue
+				# Copiamos el fichero
+				try:
+					shutil.copy(f,env.PENTEMP + 'Pelis')
+				except OSError as e:
+					Log('Ha ocurrido un error al copiar el fichero al pen ' + e.strerror, True)
+					continue
+				except IOError as e:
+					Log('Ha ocurrido un error al copiar el fichero al pen ' + e.strerror, True)
+					continue
+				# Obtenemos los atributos actuales
+				per = os.stat(f)
+				# Y le añadimos 'x' al usuario para marcarla como pasada al Pen. 
+				# Con el '|' hacemos un OR entre los permisos actuales y el que le queremos añadir
+				os.chmod(f, per.st_mode | stat.S_IXUSR)
+				copiado = 1
+		# Si hay películas nuevas, generamos la página de Últimas. CreaWeb se encarga de cambiar los permisos de los jpg
+		if len(os.popen("find . -perm 744 -name '*.jpg'").read()) > 0:
+			CreaWeb('Ultimas')
+			# Y limpiamos la carpeta de .jpg innecesarios
+			LimpiaHD()
+		salta = 0
+		# Desmontamos el pen porque cuando lo cogemos por la mañana no sabemos si se ha copiado algo o no a no ser que especifiquemos lo contrario
+		if Monta:
+			while True:
+				if os.system('sudo umount /media') == 0:
 					break
+				else:
+					time.sleep(5)
+					salta += 1
+					# Lo intentamos 5 veces, si no lo conseguimos, sacamos el error y terminamos
+					if salta == 5:
+						Log('Hubo un problema desmontando el Pen')
+						break
 	Log('Terminamos', True)
 	# Apagamos el led verde para informar de que hemos terminado la copia
 	os.system('/home/hector/bin/ledonoff none')
