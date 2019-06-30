@@ -209,7 +209,9 @@ class SonoffTH:
 	""" Para manipular los SonOff con sensor de temperatura
 	"""
 	#import paho.mqtt.client as mqtt
-	
+	# Definimos como constante la temperatura mínima del agua hasta que enconrtremos la manera de hacer un cálculo aproximado de manera automática
+	# Hemos visto que en invierno necesitamos un mínimo de 40º mientras que en verano, con el agua de base más caliente, 35 grados es suficiente.
+	TMin = 35
 	def __init__(self, Topico, Debug = False):
 		""" Inicializamos el objeto con el tópico que hemos asignado al SonOff
 		"""
@@ -236,7 +238,7 @@ class SonoffTH:
 		# Pedimos Estado
 		self.LeeEstado()
 	
-	def Controla(self, Modo, TMax = 45, TMin = 40, Tiempo = 0):
+	def Controla(self, Modo, TMax = 40, Tiempo = 0):
 		""" Función encargada de controlar el SonOff de la placa a través de MQTT.
 		Si Controla: 0 Paramos la placa
 					 1 Activamos manualmente con opción de tiempo para desonexión automática
@@ -263,7 +265,7 @@ class SonoffTH:
 		# En caso de pasarlo desde línea de comando como string, lo pasamos a int. Si ya viene como int no pasa nada
 		Modo = int(Modo)
 		TMax = int(TMax)
-		TMin = int(TMin)
+		#TMin = int(TMin)
 		Teimpo = int(Tiempo)
 		if (Modo == 0 and self.LeeEstado() == 'ON'):
 			# Paramos el SonOff
@@ -358,6 +360,13 @@ class SonoffTH:
 	def LeeEstado(self):
 		""" Esta función obtiene el estado del SonOff para saber si está encendido o apagado
 		"""
+		# Debido a que algunas veces la bomba no responde a tiempo y produce un error, intentamos primero hacerle ping a ver si 'despierta'
+		cuantos = 0
+		while cuantos < 3:
+			if os.system('ping -c 2 ' + self.Topico) == 0:
+				cuantos = 3
+			else:
+				cuantos += 1
 		self.Estado = eval(self.MandaCurl('Power'))['POWER'][0:2]
 		return self.Estado
 	
@@ -405,14 +414,24 @@ def BajaSeries(Batch = False, Debug = False):
 	Tenemos pendiente implementar control de capítulos sobreescritos por problemas
 	Tenemos que tener en cuenta aquellas series que están enteras en el curro pero no en el servidor
 	Y también aquellas que ya no están en el servidor
+	Añadimos conexión por SSH para poder modificar permisos de manera parcial al no poder hacerlo a través de FTP
+	Queda pendiente usar sftp también de manera que podamos eliminar totalmente el uso de FTP
 	"""
 	from ftplib import FTP
+	import paramiko
 	import claves
 	# Para convertir a boleano el valor del parámetro
 	Batch = (Batch == 'True')
 	Debug = (Debug == 'True')
 	# Nos vamos a las Pelis
 	os.chdir(env.HD)
+	# Abrimos la conexión por ssh
+	#client = paramiko.SSHClient()
+	client = paramiko.Transport(('hrr.no-ip.info', 2222))
+	#client.load_system_host_keys()
+	#client.set_missing_host_key_policy(paramiko.WarningPolicy)
+    #client.connect('hrr.no-ip.info', port = 2222, username = claves.FTPMulitaUser, password = claves.FTPMulitaPasswd)
+	client.connect(username = claves.FTPMulitaUser, password = claves.FTPMulitaPasswd)
 	# Ahora realizamos la conexión al servidor FTP
 	ftp = FTP()
 	ftp.connect('hrr.no-ip.info', 2211)
@@ -426,7 +445,7 @@ def BajaSeries(Batch = False, Debug = False):
 	lista = []
 	# Pendiente bajar también las infantiles que no se hayan bajado. Revisar que permisos tienen y como cambiarlos
 	for f in listaremota:
-		if f[0:10] == '-rw-rw-rw-':
+		if f[0:4] == '-rw-':
 			# Partimos de buscar el primer espacio a partir del campo hora
 			lista.append(f[f.find(' ',53)+1:])
 	lista.sort()
@@ -445,7 +464,10 @@ def BajaSeries(Batch = False, Debug = False):
 			Log('Descargamos ' + f, Debug)
 			if ftp.retrbinary('RETR ' + f, file.write, 10240) == '226 Transfer complete.':
 				# Cambiamos atributos para marcarla como bajada. Pendiente leerlos primero para solo cambiar el primero
-				ftp.sendcmd('SITE CHMOD 766 ' + f)
+				# ftp.sendcmd('SITE CHMOD 766 ' + f)
+				#stdin, stdout, stderr = client.exec_command('chmod u+x HD/' + f)
+				session = client.open_channel(kind='session')
+				session.exec_command('chmod u+x "HD/' + f + '"')
 	# Pasamos a las Series
 	os.chdir(env.PASADOS)
 	ftp.cwd('/mnt/e/Series/')
@@ -469,7 +491,9 @@ def BajaSeries(Batch = False, Debug = False):
 		# Si no es de las que seguimos en el curro
 		if not capi.Vemos():
 			# Cambiamos atributos para marcarla como bajada. Pendiente leerlos primero para solo cambiar el primero
-			ftp.sendcmd('SITE CHMOD 766 ' + capi.Todo)
+			#ftp.sendcmd('SITE CHMOD 766 ' + capi.Todo)
+			session = client.open_channel(kind='session')
+			session.exec_command('chmod u+x "Series/' + capi.Todo + '"')
 			# Lo movemos a su carpeta
 			Log('Movemos ' + capi.Todo + ' a su carpeta', Debug)
 			try:
@@ -491,14 +515,22 @@ def BajaSeries(Batch = False, Debug = False):
 			Log('Descargamos ' + capi.Todo, True)
 			if ftp.retrbinary('RETR ' + capi.Todo, file.write, 10240) == '226 Transfer complete.':
 				# Cambiamos atributos para marcarla como bajada. Pendiente leerlos primero para solo cambiar el primero
-				ftp.sendcmd('SITE CHMOD 766 ' + capi.Todo)
+				#ftp.sendcmd('SITE CHMOD 766 ' + capi.Todo)
+				session = client.open_channel(kind='session')
+				session.exec_command('chmod u+x "Series/' + capi.Todo + '"')
 				# Lo movemos a su carpeta
 				Log('Lo movemos a ' + destino + capi.Serie + '/', Debug)
 				ftp.rename(capi.Todo, destino + capi.Serie + '/' + capi.Todo)
 		# Volvemos a la carpeta de pasados
 		os.chdir('..')
+	# Mandamos al amule a refrescar la ubicación de los ficheros compartidos
+	session = client.open_channel(kind='session')
+	session.exec_command('/home/hector/bin/compartidos')
+	Log('Salida del "compartidos" y cerramos: ' + session.recv(2048).decode('ascii'))
 	# Cerramos la conexión
 	ftp.close()
+	session.close()
+	client.close()
 	return
 
 def Bomba(Debug = False):
@@ -551,7 +583,7 @@ def BombaConSensor(Debug = False):
 	# Objetivo a alcanzar. En principio, 2 grados más que la actual
 	temperatura = bomba.Temperatura + delta
 	# Aplicamos el nuevo control automático embebido en la clase
-	#bomba.Controla (4, TMax = 35, TMin = 30)
+	#bomba.Controla (4, TMax = 35)
 	# Lo dejamos inutilizado hasta confirmar que el control embebido está funcionando correctamente
 	# Volvemos a activarlo para hacer pruebas de calibración.
 	while (bomba.Estado == 'OF' and bomba.Temperatura < temperatura):
@@ -702,6 +734,27 @@ def BP(Peli, Comentario):
 			file.write(Peli + ':Borradas:' + Comentario + '\n')
 		Log('Borramos ' + Peli + ' con el comentario: ' + Comentario, True)
 	return
+
+def Clasifica(Carpeta = './'):
+	""" Función para pasar las películas de los discos a carpetas organizadas alfabéticamente por la primera letra 
+	ya que con discos tan grandes es un suplicio buscarlas con el WDTV.
+	Parte de la base de que no hay subcarpetas con las letras/números ya creadas y no hacemos ningún chequeo
+	"""
+	# Nos pasamos a la carpeta de destino
+	os.chdir(Carpeta)
+	# Cargamos la lista de ficheros
+	filenames = next(os.walk('.'))[2]
+	# La ordenamos alfabéticamente
+	filenames.sort()
+	letra = ''
+	# Respasamos la lista y cada vez que encontramos una primera letra nueva creamos la carpeta y pasamos los ficheros con
+	# esa letra a la carpeta
+	for f in filenames:
+		if not f[0] == letra:
+			letra = f[0]
+			os.mkdir(letra)
+		os.rename(f, letra + env.DIR + f)
+	return			
 
 def Copia():
 	"""Se encarga de realizar una copia del contenido de varias carpetas modificado desde ayer al ftp de Movelcan
@@ -1070,6 +1123,8 @@ def GuardaHD(Disco = ''):
 	""" Se encarga de pasar las películas a los discos externos USB para su almacenamiento
 		Empezaremos solo por las pelis por ser más sencillo su tratamiento. Tenemos que tener 
 		montado el disco en la ruta anterior a la que señala la variable HDG (/mnt/HD)
+		Como los discos ya tienen una gran capacidad (8 TB) las clasificamos en carpetas por la 
+		primera letra para facilitar su búsqueda desde el WDTV y otros.
 		El parámetro Etiq es el que se va a pasar a la función ListaPelis para almcenar la lista 
 		actualizada de películas.
 		Pasamos como parámetro la etiqueta del disco a montar
@@ -1087,6 +1142,7 @@ def GuardaHD(Disco = ''):
 	# Empezamos con las Infantiles
 	if os.path.exists(env.HDG + 'Infantiles/'):
 		GuardaPelis('Infantiles', '4')
+		CreaWeb('Infantiles')
 	# Generamos la lista de películas del disco y la página web
 	ListaPelis()
 	CreaWeb('Todas')
@@ -1135,6 +1191,8 @@ def GuardaPelis(Cuales, Que):
 		Cuales se correponde con el tipo de Pelis, por ahora solo las normales y las infantiles
 		Que se corresponde con los permisos que las distinguen, ?66 en el caso de las pelis y 
 		?46 en el caso de las infantiles por lo que solo mandamos el permiso de grupo, 6 o 4.
+		Como los discos ya tienen una gran capacidad (8 TB) las clasificamos en carpetas por la 
+		primera letra para facilitar su búsqueda desde el WDTV y otros.
 	"""
 	# Encendemos el led
 	os.system('/home/hector/bin/ledonoff heartbeat')
@@ -1152,14 +1210,16 @@ def GuardaPelis(Cuales, Que):
 		if not Queda(peli, env.HDG + Cuales):
 			continue
 		try:
-			shutil.copy(peli, env.HDG + Cuales)
-			shutil.copy(peli[:-3] + 'jpg', env.HDG + Cuales)
+			if not os.path.exists(env.HDG + Cuales + env.DIR + peli[0]):
+				os.mkdir(env.HDG + Cuales + env.DIR + peli[0])
+			shutil.copy(peli, env.HDG + Cuales + env.DIR + peli[0])
+			shutil.copy(peli[:-3] + 'jpg', env.HDG + Cuales + env.DIR + peli[0])
 		except IOError as e:
 			Log('Ha ocurrido un error copiando la película ' + peli + e.strerror, True)
 			continue
 		# Copiamos también la sheet
 		try:
-			shutil.copy('/mnt/f/Msheets/' + peli + '_sheet.jpg', env.HDG + Cuales)
+			shutil.copy('/mnt/f/Msheets/' + peli + '_sheet.jpg', env.HDG + Cuales + env.DIR + peli[0])
 		except IOError as e:
 			Log('Ha ocurrido un error copiando la Msheet ' + peli + e.strerror, True)
 			continue

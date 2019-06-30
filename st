@@ -62,6 +62,6 @@ dmesg -T|grep -v 'shrunk window'|tail -30
 echo el Syslog
 read p
 sudo tail -40 /var/log/syslog|grep -v 'shrunk window'|grep -v CRON
+tail /var/log/placa.log
 [ -f /tmp/mulacaida.txt ] && cat /tmp/mulacaida.txt
 [ -f /tmp/ftpcaido.txt ] && cat /tmp/ftpcaido.txt
-tail /var/log/placa.log
