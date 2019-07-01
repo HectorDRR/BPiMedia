@@ -293,7 +293,7 @@ class SonoffTH:
 			return
 		if Modo == 2:
 			# Si la temperatura está por debajo de la requerida
-			if self.LeeTemperatura() < TMin:
+			if self.LeeTemperatura() < self.TMin:
 				# Si está desactivada, la activamos
 				if self.Estado == 'OF':
 					#self.client.publish('cmnd/' + self.Topico + '/POWER', 'ON')
@@ -311,13 +311,13 @@ class SonoffTH:
 		if Modo == 4:
 			# Para ir desarrollando el control totalmente automatizado embebido en el objeto
 			# Si la temperatura está por debajo de la requerida
-			while self.LeeTemperatura() < TMin:
+			while self.LeeTemperatura() < self.TMin:
 				# En caso de problema leyendo la temperatura
 				if self.Temperatura == 0:
 					Log('Hemos tenido problemas leyendo la Temperatura de la ' + self.Topico)
 					return False
 				# Calculamos el tiempo necesario para llegar a la temperatura deseada. Primero obtenemos los grados de diferencia
-				temperatura = TMin - self.Temperatura
+				temperatura = self.TMin - self.Temperatura
 				# En base al tipo de instalación, definimos el coeficiente de tiempo por cada grado. Suprimimos el de la bomba puesto que lo ponemos un tiempo fijo
 				#if self.Topico == 'bomba':
 					# En el caso de la bomba, 12 segundos por grado
@@ -329,7 +329,7 @@ class SonoffTH:
 				# Solo podemos poner un delay de máximo 6 minutos, y la placa necesita 10 minutos por grado
 				# Si está desactivada, la activamos
 				if self.Estado == 'OF':
-					Log('Activamos la ' + self.Topico + ' durante ' + str(Tiempo // 60) + ':' + '{:0>2d} '.format(Tiempo % 60) + 'partiendo de una temperatura de ' + str(self.Temperatura) + 'º para alcanzar los ' + str(TMin) + 'º', self.Debug)
+					Log('Activamos la ' + self.Topico + ' durante ' + str(Tiempo // 60) + ':' + '{:0>2d} '.format(Tiempo % 60) + 'partiendo de una temperatura de ' + str(self.Temperatura) + 'º para alcanzar los ' + str(self.TMin) + 'º', self.Debug)
 					if Tiempo > 360:
 						# En caso de tenerla que mantener más de 6 minutos encendida los hacemos en tramos de 6 minutos
 						for f in range(0, Tiempo // 360, 1):
@@ -551,9 +551,8 @@ def Bomba(Debug = False):
 	if Debug:
 		Log('El estado de la bomba después de 60 segundos es ' + bomba.LeeEstado())
 	placa = SonoffTH('placa', Debug)
-	# Si el agua no está caliente, y no es de las 23 a las 6 horas, activamos la placa. Hay que pasar este valor a la clase
-	TMin = 40
-	if (placa.Temperatura < TMin and int(time.strftime('%H')) < 23 and int(time.strftime('%H')) > 5):
+	# Si el agua no está caliente, y no es de las 23 a las 6 horas, activamos la placa.
+	if (placa.Temperatura < placa.TMin and int(time.strftime('%H')) < 23 and int(time.strftime('%H')) > 5):
 		Placa(4)
 	return
 
@@ -575,9 +574,8 @@ def BombaConSensor(Debug = False):
 	placa = SonoffTH('placa', Debug)
 	# Pasamos el valor a una variable para poder finalizar el objeto
 	tplaca = placa.Temperatura
-	# Si el agua no está caliente, activamos la placa. Hay que pasar este valor a la clase
-	TMin = 35
-	if (tplaca < TMin and int(time.strftime('%H')) < 23 and int(time.strftime('%H')) > 6):
+	# Si el agua no está caliente, activamos la placa
+	if (tplaca < placa.TMin and int(time.strftime('%H')) < 23 and int(time.strftime('%H')) > 6):
 		# Temporalmente, creamos un subproceso para el tema de calentar el agua de la placa sin esperar para poder lanzar la bomba, que es lo que nos interesa. Y lo lanzamos el subproceso redirigiendo la salida y los errores a la misma variable
 		sub = subprocess.Popen(['python3','/home/hector/bin/funciones.py Placa 4'],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 	# Objetivo a alcanzar. En principio, 2 grados más que la actual
