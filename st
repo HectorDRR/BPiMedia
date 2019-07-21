@@ -26,7 +26,7 @@ if [ -a /media/Series ]
 	ls -lhst /media/Series /media/Pelis
 fi
 echo HD pendiente pasar a Pen
-find /mnt/e/HD/ -maxdepth 1 \( -perm 666 -o -perm 646 \) -exec du -ch '{}' +
+find /mnt/e/HD/ -maxdepth 1 \( -perm 666 -o -perm 646 -o -perm 677 \) -exec du -ch '{}' +
 echo HD pendiente pasar a disco
 find /mnt/e/HD/ -maxdepth 1 \( -perm 666 -o -perm 766 \) -exec du -ch '{}' +
 echo HD Infantiles pendientes de pasar a disco

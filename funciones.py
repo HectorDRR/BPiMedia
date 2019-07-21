@@ -736,7 +736,6 @@ def BP(Peli, Comentario):
 def Clasifica(Carpeta = './'):
 	""" Función para pasar las películas de los discos a carpetas organizadas alfabéticamente por la primera letra 
 	ya que con discos tan grandes es un suplicio buscarlas con el WDTV.
-	Parte de la base de que no hay subcarpetas con las letras/números ya creadas y no hacemos ningún chequeo
 	"""
 	# Nos pasamos a la carpeta de destino
 	os.chdir(Carpeta)
@@ -750,7 +749,8 @@ def Clasifica(Carpeta = './'):
 	for f in filenames:
 		if not f[0] == letra:
 			letra = f[0]
-			os.mkdir(letra)
+			if not os.path.exists(letra):
+				os.mkdir(letra)
 		os.rename(f, letra + env.DIR + f)
 	return			
 
@@ -843,6 +843,7 @@ def CreaWeb(p1 = 'Ultimas', Pocas = 0, Debug = False):
 	El p1 será la plantilla a usar, por defecto, el más usado, Ultimas
 	El Pocas habilita la manera antigua de presentar las carátulas. Útil para el curro y las Últimas sin índices y con las
 	carátulas visibles
+	Modificamos para tratar a partir de los discos de 8 TB las películas en carpetas por la inicial para poder manejarlas mejor desde el WDTV
 	"""
 	import codecs
 	
@@ -893,16 +894,16 @@ def CreaWeb(p1 = 'Ultimas', Pocas = 0, Debug = False):
 		# hay pelis nuevas y lanzar la creación de la página de últimas
 		os.system('chmod u-x *.jpg')
 	else:
-		if not os.path.exists(env.TMP + p1):
-			# Creamos el fichero con las pelis o series a incluir en la página
-			if p1 == 'Todas':
-				os.system('cat ' + env.PLANTILLAS + 'HD* >' + env.TMP + 'Todas')
+		#if not os.path.exists(env.TMP + p1):
+		# Creamos el fichero con las pelis o series a incluir en la página
+		if p1 == 'Todas':
+			os.system('cat ' + env.PLANTILLAS + 'HD* >' + env.TMP + 'Todas')
+		else:
+			if p1 == 'Series':
+				deque = 'Series_*'
 			else:
-				if p1 == 'Series':
-					deque = 'Series_*'
-				else:
-					deque = 'HD*' + p1
-				os.system('cat ' + env.PLANTILLAS + deque + '>' + env.TMP + p1)
+				deque = 'HD*' + p1
+			os.system('cat ' + env.PLANTILLAS + deque + '>' + env.TMP + p1)
 		with open(env.TMP + p1) as file:
 			try:
 				pelis = file.readlines()
@@ -1720,6 +1721,7 @@ def MandaCurl(URL):
 	
 def ObtenLista(Ulti = 0):
 	""" Mini función para obtener las películas de una carpeta determinada.
+		Ahora tenemos que tener en cuenta que a partir de los discos de 8 TB las pelis las guardamos en carpetas por iniciales
 	"""
 	import glob
 	# Si estamos en el curro
@@ -1729,12 +1731,19 @@ def ObtenLista(Ulti = 0):
 			cuales = '/aa-h /o-d'
 			pelis = list(filter(None,os.popen('dir /b *.mkv *.mp4 *.wmv *.avi' + cuales).read().split('\n')))
 			return pelis
-	# Generamos la lista teniendo en cuenta las distintas extensiones
-	pelis = glob.glob('*.mkv') + glob.glob('*.wmv') + glob.glob('*.mp4') + glob.glob('*.avi')
-	# La lista de las carpetas. Tenemos un problema cuando la carpeta está vacía, aunque desconozco el porqué.
-	carpetas = next(os.walk('.'))[1]
-	if len(carpetas) > 0:
-		pelis.extend(carpetas)
+	# Buscamos en el interior de cada carpeta
+	pelis = []
+	for f in next(os.walk('.'))[1]:
+		# Nos pasamos a la carpeta
+		os.chdir(f)
+		# Generamos la lista teniendo en cuenta las distintas extensiones
+		pelis += glob.glob('*.mkv') + glob.glob('*.wmv') + glob.glob('*.mp4') + glob.glob('*.avi')
+		# La lista de las carpetas. Tenemos un problema cuando la carpeta está vacía, aunque desconozco el porqué.
+		carpetas = next(os.walk('.'))[1]
+		if len(carpetas) > 0:
+			pelis.extend(carpetas)
+		# Volvemos a la carpeta padre
+		os.chdir('..')
 	# Las ordenamos alfabéticamente
 	if Ulti:
 		pelis.sort(key=os.path.getmtime, reverse=True)
