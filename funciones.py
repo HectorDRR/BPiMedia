@@ -1146,6 +1146,7 @@ def GuardaHD(Disco = ''):
 	ListaPelis()
 	CreaWeb('Todas')
 	CreaWeb('Pelis')
+	CreaWeb('Vistas')
 	# Limpiamos las carátulas que hayan quedado en la carpeta env.HD
 	LimpiaHD()
 	Etiq = GuardaLibre(env.HDG)
