@@ -1720,7 +1720,7 @@ def MandaCurl(URL):
 	respuesta = os.popen('curl -s ' + URL).read()
 	return respuesta
 	
-def ObtenLista(Ulti = 0):
+def ObtenLista(Ulti = 0, Debug = 0):
 	""" Mini función para obtener las películas de una carpeta determinada.
 		Ahora tenemos que tener en cuenta que a partir de los discos de 8 TB las pelis las guardamos en carpetas por iniciales
 	"""
@@ -1734,17 +1734,21 @@ def ObtenLista(Ulti = 0):
 			return pelis
 	# Buscamos en el interior de cada carpeta
 	pelis = []
-	for f in next(os.walk('.'))[1]:
-		# Nos pasamos a la carpeta
-		os.chdir(f)
-		# Generamos la lista teniendo en cuenta las distintas extensiones
+	folders = next(os.walk('.'))[1]
+	if len(folders) > 0:
+		for f in folders:
+			# Nos pasamos a la carpeta si hay subcarpetas. De lo contrario procesamos lo que hay en la actual
+			os.chdir(f)
+			# Generamos la lista teniendo en cuenta las distintas extensiones
+			pelis += glob.glob('*.mkv') + glob.glob('*.wmv') + glob.glob('*.mp4') + glob.glob('*.avi')
+			# La lista de las carpetas. Tenemos un problema cuando la carpeta está vacía, aunque desconozco el porqué.
+			carpetas = next(os.walk('.'))[1]
+			if len(carpetas) > 0:
+				pelis.extend(carpetas)
+			# Volvemos a la carpeta padre
+			os.chdir('..')
+	else:
 		pelis += glob.glob('*.mkv') + glob.glob('*.wmv') + glob.glob('*.mp4') + glob.glob('*.avi')
-		# La lista de las carpetas. Tenemos un problema cuando la carpeta está vacía, aunque desconozco el porqué.
-		carpetas = next(os.walk('.'))[1]
-		if len(carpetas) > 0:
-			pelis.extend(carpetas)
-		# Volvemos a la carpeta padre
-		os.chdir('..')
 	# Las ordenamos alfabéticamente
 	if Ulti:
 		pelis.sort(key=os.path.getmtime, reverse=True)
