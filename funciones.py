@@ -908,7 +908,7 @@ def CreaWeb(p1 = 'Ultimas', Pocas = 0, Debug = False):
 			try:
 				pelis = file.readlines()
 			except UnicodeDecodeError as e:
-				Log('Error al procesar el comentario en el byte ' + str(e.start), True)
+				Log('Error al procesar el comentario en el byte ' + str(e.start) + ' del fichero: ' + p1, True)
 				return 'Error con el juego de caracteres'
 		# Quitamos el retorno de carro del final '\n' y suprimimos posibles líneas vacías producto de unir varios ficheros
 		if not Pocas:
@@ -1084,6 +1084,37 @@ def Etiqueta(Ruta):
 		Etiq = os.popen('mount -l|grep ' + Ruta[:-1]).read()
 		Etiq = Etiq[Etiq.find('[')+1:-2]
 	return Etiq
+
+def FAApi(Serie):
+	""" Para obtener directamente desde filmaffinity la página y la carátula de las series
+	"""
+	# En caso de que haya más de una palabra tenemos que meter un '+' entre ellas
+	pp = Serie
+	if len(Serie.split()) > 1:
+		pp = ''
+		for f in Serie.split():
+			pp = pp + f + '+'
+		pp = pp[0:-1]
+	# Primero obtenemos las posibles coincidencias, ya que la búsqueda no permite 'ands'
+	lista = eval(MandaCurl('https://api-filmaffinity.herokuapp.com/api/busqueda/' + pp))
+	pagina = ''
+	imagen = ''
+	for f in lista:
+		print(f['titulo'].upper(),Serie.upper())
+		if f['titulo'].upper().startswith(Serie.upper() + ' (SERIE DE TV)'):
+			pagina = f['id'] + '.html'
+			os.popen('wget -qO ' + env.TMP + 'FAApi ' + pagina)
+			# Parece que el wget es asíncrono y no espera a terminar de sacar el fichero cuando se invoca, por lo que ponemos una pausa
+			time.sleep(1)
+			with open(env.TMP + 'FAApi') as file:
+				for f in file:
+					if f.startswith('<meta property="og:image"'):
+						imagen = f.split()[2][9:-1]
+			break
+	if pagina == '':
+		Log('No se ha encontrado la serie en FilmAffinity: ', True)
+		print(lista)
+	return pagina, imagen
 
 def GeneraLista(Listado, Pelis, Serie = False, Debug = False):
 	""" Pequeña función para generar la lista de películas o series con sus comentarios si los hubiera.
@@ -1419,6 +1450,8 @@ def LimpiaHD():
 			for g in borra:
 				print('Borramos ' + g)
 				os.remove(g)
+	# También eliminamos los posibles .tmp que se hayan quedado residuales del ThumbGen
+	os.remove('*.tmp')
 	return
 
 def LimpiaPasados():
@@ -1728,13 +1761,14 @@ def ObtenLista(Ulti = 0, Debug = 0):
 	# Si estamos en el curro
 	if env.SISTEMA == 'Windows':
 		# Si últimas, solo las nuevas ordenadas por fecha, en caso contrario, ordenadas por nombre y sin el thumbs.db '/a-h'
-		if Ulti:
+		if int(Ulti) > 0:
 			cuales = '/aa-h /o-d'
 			pelis = list(filter(None,os.popen('dir /b *.mkv *.mp4 *.wmv *.avi' + cuales).read().split('\n')))
 			return pelis
 	# Buscamos en el interior de cada carpeta
 	pelis = []
 	folders = next(os.walk('.'))[1]
+	# En el curro hay que tener en cuenta que si hay al menos una carpeta no hará la lista del resto de pelis
 	if len(folders) > 0:
 		for f in folders:
 			# Nos pasamos a la carpeta si hay subcarpetas. De lo contrario procesamos lo que hay en la actual

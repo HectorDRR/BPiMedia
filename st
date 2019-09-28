@@ -4,6 +4,8 @@ function Series {
 uptime
 free -h
 echo Temperatura: `cat /sys/class/thermal/thermal_zone0/temp`
+~/bin/venus.sh
+echo Producción FV: `cat /tmp/FV |cut -c 11-16`W
 procesos.sh
 # Vemos cuanto espacio queda libre para ponerlo en otro color en caso de que haya poco
 # Usamos el printf para conventirlo a entero redondeando puesto que el bash no admite comparar floats
