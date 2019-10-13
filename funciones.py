@@ -7,12 +7,7 @@ En primer lugar, mantendremos una lista de las funciones implementadas, su funci
 que son opcionales
 """
 
-import time
-import shutil
-import os
-import re
-import sys
-import stat
+import time, shutil, os, re, sys, stat
 
 # Definición de variables para hacer la macro portable entre distintas configuraciones/plataformas
 env = __import__('Entorno_' + sys.platform)
@@ -1451,7 +1446,9 @@ def LimpiaHD():
 				print('Borramos ' + g)
 				os.remove(g)
 	# También eliminamos los posibles .tmp que se hayan quedado residuales del ThumbGen
-	os.remove('*.tmp')
+	lista = glob.glob('*.tmp')
+	if len(lista) > 0:
+		os.remove('*.tmp')
 	return
 
 def LimpiaPasados():
