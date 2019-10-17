@@ -204,9 +204,10 @@ class SonoffTH:
 	""" Para manipular los SonOff con sensor de temperatura
 	"""
 	#import paho.mqtt.client as mqtt
-	# Definimos como constante la temperatura mínima del agua hasta que enconrtremos la manera de hacer un cálculo aproximado de manera automática
-	# Hemos visto que en invierno necesitamos un mínimo de 40º mientras que en verano, con el agua de base más caliente, 35 grados es suficiente.
-	TMin = 35
+	# Definimos como constante, importándola de env., la temperatura mínima del agua hasta que encontremos la manera de hacer un cálculo 
+	# aproximado de manera automática. Hemos visto que en invierno necesitamos un mínimo de 40º mientras que en verano, con el agua de 
+	# base más caliente, 35 grados es suficiente.
+	TMin = env.TEMPERATURA
 	def __init__(self, Topico, Debug = False):
 		""" Inicializamos el objeto con el tópico que hemos asignado al SonOff
 		"""
@@ -233,7 +234,7 @@ class SonoffTH:
 		# Pedimos Estado
 		self.LeeEstado()
 	
-	def Controla(self, Modo, TMax = 40, Tiempo = 0):
+	def Controla(self, Modo, TMax = env.TEMPERATURA, Tiempo = 0):
 		""" Función encargada de controlar el SonOff de la placa a través de MQTT.
 		Si Controla: 0 Paramos la placa
 					 1 Activamos manualmente con opción de tiempo para desonexión automática
@@ -321,7 +322,7 @@ class SonoffTH:
 					# En el caso de la placa, partiendo de 2 kW de resistencia y 200 l de depótiso obtenemos unos 7 minutos. 1º = 4.180 Julios x kg = 4.180 * 200 kg = 836.000 J / 2.000 W = 418 seg.
 					grado = 418
 				Tiempo = temperatura * grado
-				# Solo podemos poner un delay de máximo 6 minutos, y la placa necesita 10 minutos por grado
+				# Solo podemos poner un delay de máximo 6 minutos, y la placa necesita 7 minutos por grado
 				# Si está desactivada, la activamos
 				if self.Estado == 'OF':
 					Log('Activamos la ' + self.Topico + ' durante ' + str(Tiempo // 60) + ':' + '{:0>2d} '.format(Tiempo % 60) + 'partiendo de una temperatura de ' + str(self.Temperatura) + 'º para alcanzar los ' + str(self.TMin) + 'º', self.Debug)
@@ -540,15 +541,15 @@ def Bomba(Debug = False):
 	if bomba.Estado == 'ON':
 		Log('La bomba está conectada, así que no la activamos', Debug)
 		return
-	# Activamos la bomba durante 90 segundos
-	bomba.Controla(1, Tiempo = 90)
-	time.sleep(91)
+	# Activamos la bomba durante env.TBOMB segundos
+	bomba.Controla(1, Tiempo = env.TBOMBA)
+	time.sleep(env.TBOMBA + 1)
 	if Debug:
-		Log('El estado de la bomba después de 60 segundos es ' + bomba.LeeEstado())
+		Log('El estado de la bomba después de' + str(env.TBOMBA) + ' segundos es ' + bomba.LeeEstado())
 	placa = SonoffTH('placa', Debug)
-	# Si el agua no está caliente, y no es de las 23 a las 6 horas, activamos la placa.
+	# Si el agua no está caliente, y no es de las 23 a las 6 horas, activamos la placa durante 6 minutos
 	if (placa.Temperatura < placa.TMin and int(time.strftime('%H')) < 23 and int(time.strftime('%H')) > 5):
-		Placa(4)
+		placa.Controla(1, Tiempo = 360)
 	return
 
 def BombaConSensor(Debug = False):
@@ -1871,8 +1872,6 @@ def Placa(Quehacemos = 4, Tiempo = 0):
 	"""
 	# Cambiamos el tipo del parámetro por si lo hemos llamado desde línea de comando y nos llega como string
 	Quehacemos = int(Quehacemos)
-	# Inicializamos temp por si nos despistamos antes de hacer el return
-	temp = 0
 	# Si solo queremos apagar, mandamos el comando por curl y evitamos la inicialización de la clase
 	if Quehacemos == 0:
 		return MandaCurl('http://placa/cm?cmnd=Power%20Off')
@@ -1886,14 +1885,12 @@ def Placa(Quehacemos = 4, Tiempo = 0):
 			return
 	# Creamos la instancia de la placa
 	placa = SonoffTH('placa', True)
-	if (placa.LeeTemperatura() >= 40 and Quehacemos == 4):
+	if (placa.LeeTemperatura() >= env.TEMPERATURA and Quehacemos == 4):
 		Log('La temperatura del agua está a ' + str(placa.Temperatura) + 'º, por lo que no activamos la placa', True)
 	else:
 		# En caso de control sencillo, como ya está programado en la clase lo pasamos directamente
-		placa.Controla(Quehacemos, Tiempo)
-		# Si solo queremos la temperatura o aunque no la queramos, la devolvemos
-		temp = placa.Temperatura
-	return temp
+		placa.Controla(Quehacemos, Tiempo = Tiempo)
+	return placa.Temperatura
 
 def Prueba(Param):
 	""" Para probar funciones que estamos desarrollando

@@ -28,9 +28,6 @@ MM = '/mnt/f/'
 #Página web
 WEB = '/mnt/f/'
 #Sistema del equipo
-#import platform
-#SISTEMA = platform.system()
-#del platform
 SISTEMA = 'Linux'
 #Comando para borrar
 DEL = 'rm '
@@ -38,3 +35,9 @@ DEL = 'rm '
 DIR = '/'
 #Para cambiar permisos/Atributos. Pendiente de implementar
 ATTRIB = 'chmod '
+
+# Constantes del sistema que pueden variar a lo largo del año
+# Consigna de temperatura de la placa
+TEMPERATURA = 35
+# Tiempo de funcionamiento de la bomba
+TBOMBA = 60
