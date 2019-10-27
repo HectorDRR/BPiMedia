@@ -207,7 +207,19 @@ class SonoffTH:
 	# Definimos como constante, importándola de env., la temperatura mínima del agua hasta que encontremos la manera de hacer un cálculo 
 	# aproximado de manera automática. Hemos visto que en invierno necesitamos un mínimo de 40º mientras que en verano, con el agua de 
 	# base más caliente, 35 grados es suficiente.
-	TMin = env.TEMPERATURA
+	# Partimos de que en Octubre tenemos que empezar a subir la temperatura del agua y lo hacemos de grado en grado partiendo de 35º
+	mes = time.localtime().tm_mon
+	# A partir de Octubre sencillamente le restamos los 9 meses anteriores y tenemos 1 grado por cada mes hasta Diciembre
+	if mes > 9:
+		mes = mes - 9
+	# A partir de Enero y hasta Mayo, aumentamos los 3º anteriores + 1
+	else:
+		if mes < 6 :
+			mes = 3 + mes
+		else:
+			mes = 0
+	# Y por ahora, asumimos que Junio va a estar calentito y que vamos amantener la consigna mínima de 35º de Junio a Septiembre
+	TMin = env.TEMPERATURA + mes
 	def __init__(self, Topico, Debug = False):
 		""" Inicializamos el objeto con el tópico que hemos asignado al SonOff
 		"""
@@ -541,7 +553,7 @@ def Bomba(Debug = False):
 	if bomba.Estado == 'ON':
 		Log('La bomba está conectada, así que no la activamos', Debug)
 		return
-	# Activamos la bomba durante env.TBOMB segundos
+	# Activamos la bomba durante env.TBOMBA segundos
 	bomba.Controla(1, Tiempo = env.TBOMBA)
 	time.sleep(env.TBOMBA + 1)
 	if Debug:
