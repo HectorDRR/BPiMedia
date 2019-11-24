@@ -218,7 +218,7 @@ class SonoffTH:
 			mes = 3 + mes
 		else:
 			mes = 0
-	# Y por ahora, asumimos que Junio va a estar calentito y que vamos amantener la consigna mínima de 35º de Junio a Septiembre
+	# Y por ahora, asumimos que Junio va a estar calentito y que vamos a mantener la consigna mínima de 35º de Junio a Septiembre
 	TMin = env.TEMPERATURA + mes
 	def __init__(self, Topico, Debug = False):
 		""" Inicializamos el objeto con el tópico que hemos asignado al SonOff
@@ -1093,8 +1093,8 @@ def Etiqueta(Ruta):
 		Etiq = Etiq[Etiq.find('[')+1:-2]
 	return Etiq
 
-def FAApi(Serie):
-	""" Para obtener directamente desde filmaffinity la página y la carátula de las series
+def FAApi(Serie, Mini = 0):
+	""" Para obtener directamente desde filmaffinity la página y la carátula de las series y Miniseries
 	"""
 	# En caso de que haya más de una palabra tenemos que meter un '+' entre ellas
 	pp = Serie
@@ -1107,9 +1107,15 @@ def FAApi(Serie):
 	lista = eval(MandaCurl('https://api-filmaffinity.herokuapp.com/api/busqueda/' + pp))
 	pagina = ''
 	imagen = ''
+	#Mini = eval(Mini)
+	# En caso de que sea una Miniserie tenemos que cambiar la búsqueda
+	if Mini == 1:
+		coletilla = 'MINI'
+	else:
+		coletilla = ''
 	for f in lista:
 		print(f['titulo'].upper(),Serie.upper())
-		if f['titulo'].upper().startswith(Serie.upper() + ' (SERIE DE TV)'):
+		if f['titulo'].upper().startswith(Serie.upper() + ' (' + coletilla + 'SERIE DE TV)'):
 			pagina = f['id'] + '.html'
 			os.popen('wget -qO ' + env.TMP + 'FAApi ' + pagina)
 			# Parece que el wget es asíncrono y no espera a terminar de sacar el fichero cuando se invoca, por lo que ponemos una pausa
@@ -1897,8 +1903,8 @@ def Placa(Quehacemos = 4, Tiempo = 0):
 			return
 	# Creamos la instancia de la placa
 	placa = SonoffTH('placa', True)
-	if (placa.LeeTemperatura() >= env.TEMPERATURA and Quehacemos == 4):
-		Log('La temperatura del agua está a ' + str(placa.Temperatura) + 'º, por lo que no activamos la placa', True)
+	if (placa.LeeTemperatura() >= placa.TMin and Quehacemos == 4):
+		Log('La temperatura del agua está a ' + str(placa.Temperatura) + 'º y la consigna es de ' + str(placa.TMin) + 'º, por lo que no activamos la placa', True)
 	else:
 		# En caso de control sencillo, como ya está programado en la clase lo pasamos directamente
 		placa.Controla(Quehacemos, Tiempo = Tiempo)
