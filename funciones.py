@@ -1,4 +1,4 @@
-#! /usr/bin/env python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Funciones.py Conjunto de macros para gestionar las descargas del emule, torrent, y la creación y mantenimiento de mi página web
@@ -1894,6 +1894,14 @@ def Placa(Quehacemos = 4, Tiempo = 0):
 	if Quehacemos == 0:
 		return MandaCurl('http://placa/cm?cmnd=Power%20Off')
 	if Quehacemos == 4:
+		# En caso de habernos bañado todos podemos crear un fichero en /tmp para que no se lance más. Comprobamos la existencia de dicho fichero
+		# y en caso de que exista salimos, pero antes comprobamos si es la última activación en la noche (21:45) en ese caso, antes de salir, lo borramos
+		if os.path.exists('/tmp/TodosBañados'):
+			if int(time.strftime('%H%M')) > 2144:
+				os.remove('/tmp/TodosBañados')
+				Log('Borramos TodosBañados')
+			Log('Ya se han bañado todos así que no activamos placa')
+			return
 		# Comprobamos si está corriendo ya el control de la placa. En caso de que no lo esté solo devolverá 3 procesos: el bash que lanza el cron, el de Botones y el pgrep
 		# Si lo está devuelve 4 en caso de que se haya lanzado por el cron, lo más habitual
 		proceso = list(os.popen('pgrep -af Placa'))
@@ -2110,6 +2118,7 @@ def Temperatura(Cada = 2, Cual = 'Temperatura'):
 	# Cargamos los datos excluyendo los de la Bomba, por ahora
 	bd = sqlite3.connect('/mnt/e/.mini/placa.db')
 	cursor = bd.cursor()
+	
 	# Obtenemos la fecha de ayer para sacar los de las últimas 24 horas
 	fecha = datetime.datetime.now()
 	# Obtenemos cuantos minutso ha estado encedida la placa este mes

@@ -5,6 +5,7 @@ uptime
 free -h
 echo Temperatura: `cat /sys/class/thermal/thermal_zone0/temp`
 ~/bin/venus.sh
+echo Temperatura del agua: `curl -s http://placa/cm?cmnd=Status%2010|cut -c 69-72`
 echo Producción FV: `cat /tmp/FV |cut -c 11-16`W
 procesos.sh
 # Vemos cuanto espacio queda libre para ponerlo en otro color en caso de que haya poco
