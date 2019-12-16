@@ -1467,7 +1467,8 @@ def LimpiaHD():
 	# También eliminamos los posibles .tmp que se hayan quedado residuales del ThumbGen
 	lista = glob.glob('*.tmp')
 	if len(lista) > 0:
-		os.remove('*.tmp')
+		for f in lista:
+			os.remove(f)
 	return
 
 def LimpiaPasados():
