@@ -1163,7 +1163,7 @@ def GeneraLista(Listado, Pelis, Serie = False, Debug = False):
 			file.write(f + ':' + Listado + ':' + comen + capis + '\n')
 	return
 
-def GuardaHD(Disco = ''):
+def GuardaHD(Disco = 'HD-TB-8-1'):
 	""" Se encarga de pasar las películas a los discos externos USB para su almacenamiento
 		Empezaremos solo por las pelis por ser más sencillo su tratamiento. Tenemos que tener 
 		montado el disco en la ruta anterior a la que señala la variable HDG (/mnt/HD)
@@ -1173,11 +1173,11 @@ def GuardaHD(Disco = ''):
 		actualizada de películas.
 		Pasamos como parámetro la etiqueta del disco a montar
 	"""
-	if not (os.path.exists(env.HD + 'Pelis') or os.path.exists(env.HD + 'Infantiles')) and not Disco == '':
+	if not (os.path.exists(env.HDG + 'Pelis') or os.path.exists(env.HDG + 'Infantiles')) and not Disco == '':
 		# Si devuelve 0 (False) es que todo ha ido bien. Si es mayor que 0 (True)
 		if os.system('sudo mount /dev/disk/by-label/' + Disco + ' /mnt/HD'):
 			print('No podemos montar el disco ' + Disco + ' en /mnt/HD o no tiene una carpeta "Pelis"')
-			exit()
+			return
 	Log('Comenzamos la copia de pelis HD', True)
 	# Nos vamos a la carpeta de las pelis
 	os.chdir(env.HD)
