@@ -769,7 +769,7 @@ def Copia():
 	import claves
 	
 	# Designamos las carpetas que copiar
-	rutas = ['/home/hector/bin', '/mnt/e/util', '/mnt/f/scripts', '/mnt/e/.mini']
+	rutas = ['/home/hector/bin', '/mnt/e/util', '/mnt/f', '/mnt/f/scripts', '/mnt/e/.mini']
 	# Abrimos la conexión FTP
 	ftp = FTP()
 	ftp.connect('files.000webhost.com', 21)
