@@ -431,8 +431,6 @@ def BajaSeries(Batch = False, Debug = False):
 	# Para convertir a boleano el valor del parámetro
 	Batch = (Batch == 'True')
 	Debug = (Debug == 'True')
-	# Nos vamos a las Pelis
-	os.chdir(env.HD)
 	# Abrimos la conexión por ssh
 	#client = paramiko.SSHClient()
 	client = paramiko.Transport(('hrr.no-ip.info', 2222))
@@ -446,37 +444,7 @@ def BajaSeries(Batch = False, Debug = False):
 	# Cambiamos encoding a utf8 para que se respeten los acentos
 	ftp.encoding='utf-8'
 	ftp.login(claves.FTPMulitaUser, claves.FTPMulitaPasswd)
-	ftp.cwd('HD')
-	# Obtenemos la lista de películas pendientes de procesar
-	listaremota = []
-	ftp.retrlines('list *.mkv', callback=listaremota.append)
-	lista = []
-	# Pendiente bajar también las infantiles que no se hayan bajado. Revisar que permisos tienen y como cambiarlos
-	for f in listaremota:
-		if f[0:4] == '-rw-':
-			# Partimos de buscar el primer espacio a partir del campo hora
-			lista.append(f[f.find(' ',53)+1:])
-	lista.sort()
-	for f in lista:
-		print(lista.index(f) + 1, f)
-	# Empezamos a bajarnos las películas
-	for f in lista:
-		if not Queda(f, env.HD, ftp):
-			if Batch:
-				Log('No queda espacio para bajar ' + f)
-				continue
-			else:
-				if input('No queda espacio suficiente en ' + env.HD[0:2] + ', limpia') == 'n':
-						continue
-		with open(f, 'wb') as file:
-			Log('Descargamos ' + f, Debug)
-			if ftp.retrbinary('RETR ' + f, file.write, 10240) == '226 Transfer complete.':
-				# Cambiamos atributos para marcarla como bajada. Pendiente leerlos primero para solo cambiar el primero
-				# ftp.sendcmd('SITE CHMOD 766 ' + f)
-				#stdin, stdout, stderr = client.exec_command('chmod u+x HD/' + f)
-				session = client.open_channel(kind='session')
-				session.exec_command('chmod u+x "HD/' + f + '"')
-	# Pasamos a las Series
+	# Vamos a las Series
 	os.chdir(env.PASADOS)
 	ftp.cwd('/mnt/e/Series/')
 	# Generamos la lista de series que hay
@@ -534,7 +502,40 @@ def BajaSeries(Batch = False, Debug = False):
 	# Mandamos al amule a refrescar la ubicación de los ficheros compartidos
 	session = client.open_channel(kind='session')
 	session.exec_command('/home/hector/bin/compartidos')
-	Log('Salida del "compartidos" y cerramos: ' + session.recv(2048).decode('ascii'))
+	Log('Salida del "compartidos":' + session.recv(2048).decode('ascii'))
+	# Nos vamos a las Pelis
+	os.chdir(env.HD)
+	ftp.cwd('/mnt/e/HD')
+	# Obtenemos la lista de películas pendientes de procesar
+	listaremota = []
+	ftp.retrlines('list *.mkv', callback=listaremota.append)
+	lista = []
+	# Pendiente bajar también las infantiles que no se hayan bajado. Revisar que permisos tienen y como cambiarlos
+	for f in listaremota:
+		if f[0:4] == '-rw-':
+			# Partimos de buscar el primer espacio a partir del campo hora
+			lista.append(f[f.find(' ',53)+1:])
+	lista.sort()
+	for f in lista:
+		print(lista.index(f) + 1, f)
+	# Empezamos a bajarnos las películas
+	for f in lista:
+		if not Queda(f, env.HD, ftp):
+			if Batch:
+				Log('No queda espacio para bajar ' + f)
+				continue
+			else:
+				if input('No queda espacio suficiente en ' + env.HD[0:2] + ', limpia') == 'n':
+						continue
+		with open(f, 'wb') as file:
+			Log('Descargamos ' + f, Debug)
+			if ftp.retrbinary('RETR ' + f, file.write, 10240) == '226 Transfer complete.':
+				# Cambiamos atributos para marcarla como bajada. Pendiente leerlos primero para solo cambiar el primero
+				# ftp.sendcmd('SITE CHMOD 766 ' + f)
+				#stdin, stdout, stderr = client.exec_command('chmod u+x HD/' + f)
+				session = client.open_channel(kind='session')
+				session.exec_command('chmod u+x "HD/' + f + '"')
+	Log('Hemos temrinado con las pelis  y cerramos')
 	# Cerramos la conexión
 	ftp.close()
 	session.close()
@@ -1281,6 +1282,8 @@ def GuardaSeries(Ruta, deb = False):
 		Si la llamamos con deb = True la ponemos en modo depuración para que 
 		no haga efecto sino muestre lo que va a hacer
 	"""
+	if deb:
+		deb = True
 	lista = []
 	cuantos = 0
 	Log('Comenzamos la copia de las Series ' + Ruta, True)
@@ -1341,19 +1344,22 @@ def GuardaSeries(Ruta, deb = False):
 		# Cambiamos los permisos para marcarla como ya copiada rw-r--r--
 		if deb:
 			print('cambiamos permisos a ' + serie)
+			print('Y también a las copiadas: ' + env.SERIESG + Ruta + '/Series/' + serie)
 		else:
-			os.chmod(serie,0o644)
+			os.chmod(serie, 0o644)
 			# También los cambiamos en el disco de destino para en el caso de recuperarlos para verlos no aparezcan como pendientes de copiar de nuevo
-			os.chmod(env.SERIESG + Ruta + '/Series/' + serie,0o644)
+			os.chmod(env.SERIESG + Ruta + '/Series/' + serie, 0o644)
 		# Log('Se ha copiado la serie ' + serie, True)
 	Log('Hemos terminado de copiar las series', True)
-	GuardaLibre(env.SERIESG + Ruta + '/')
-	ListaSeries(Ruta)
-	CreaWeb('Series')
-	# Desmontamos la unidad
-	os.system('sync &&sudo umount /dev/disk/by-label/Series_' + Ruta[0] +'-' + Ruta[1])
-	# Dormimos la unidad
-	os.system('sudo hdparm -y /dev/disk/by-label/Series_' + Ruta[0] +'-' + Ruta[1])
+	# Si no estamos depurando seguimos con el resto de procesos
+	if not deb:
+		GuardaLibre(env.SERIESG + Ruta + '/')
+		ListaSeries(Ruta)
+		CreaWeb('Series')
+		# Desmontamos la unidad
+		os.system('sync &&sudo umount /dev/disk/by-label/Series_' + Ruta[0] +'-' + Ruta[1])
+		# Dormimos la unidad
+		os.system('sudo hdparm -y /dev/disk/by-label/Series_' + Ruta[0] +'-' + Ruta[1])
 	# Apagamos el led
 	os.system('/home/hector/bin/ledonoff none')
 	return
