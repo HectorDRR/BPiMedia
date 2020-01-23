@@ -6,6 +6,7 @@ free -h
 echo Temperatura: `cat /sys/class/thermal/thermal_zone0/temp`
 ~/bin/venus.sh
 echo Temperatura del agua: `curl -s http://placa/cm?cmnd=Status%2010|cut -c 69-72`
+echo Estado de la placa: `curl -s http://placa/cm?cmnd=POWER|cut -c 11-`
 echo Producción FV: `cat /tmp/FV |cut -c 11-16`W
 procesos.sh
 # Vemos cuanto espacio queda libre para ponerlo en otro color en caso de que haya poco
@@ -64,7 +65,7 @@ echo El Log del sistema
 dmesg -T|grep -v 'shrunk window'|tail -30
 echo el Syslog
 read p
-sudo tail -40 /var/log/syslog|grep -v 'shrunk window'|grep -v CRON
+sudo tail -40 /var/log/syslog|grep -v CRON
 tail /var/log/placa.log
 [ -f /tmp/mulacaida.txt ] && cat /tmp/mulacaida.txt
 [ -f /tmp/ftpcaido.txt ] && cat /tmp/ftpcaido.txt
