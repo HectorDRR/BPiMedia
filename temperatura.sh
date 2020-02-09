@@ -6,7 +6,7 @@ temp=`curl -s http://placa/cm?cmnd=Status%2010`
 ~/bin/venus.sh
 if [ ${#temp} -gt 0 ]
 	then
-	sed -E s/de\ \<b\>..../de\ \<b\>`echo $temp|cut -c 69-72`/ /mnt/f/index.orig >/mnt/f/index.temp
+	sed -E s/de\ \<b\>..../de\ \<b\>`echo $temp|cut -c 89-92`/ /mnt/f/index.orig >/mnt/f/index.temp
 	sed -E s/\<i\>xxx/\<i\>`cat /tmp/FV|cut -c 11-15`/ /mnt/f/index.temp >/mnt/f/index.html
 	python3 /home/hector/bin/funciones.py Temperatura
 fi

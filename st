@@ -5,9 +5,10 @@ uptime
 free -h
 echo Temperatura: `cat /sys/class/thermal/thermal_zone0/temp`
 ~/bin/venus.sh
-echo Temperatura del agua: `curl -s http://placa/cm?cmnd=Status%2010|cut -c 69-72`
+echo Temperatura del agua: `curl -s http://placa/cm?cmnd=Status%2010|cut -c 89-92`
 echo Estado de la placa: `curl -s http://placa/cm?cmnd=POWER|cut -c 11-`
 echo Producción FV: `cat /tmp/FV |cut -c 11-16`W
+echo Batería: `cat /tmp/Bat | cut -c 11-12`%
 procesos.sh
 # Vemos cuanto espacio queda libre para ponerlo en otro color en caso de que haya poco
 # Usamos el printf para conventirlo a entero redondeando puesto que el bash no admite comparar floats

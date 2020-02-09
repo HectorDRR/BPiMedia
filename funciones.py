@@ -412,6 +412,7 @@ class SonoffTH:
 		#c.close()
 		#return buffer.getvalue().decode()
 		# Debido a los problemas para istalar el PyCurl en el Odroid lo hacemos a través de una llamada al sistema
+		Comando = Comando.replace(';','%3B')
 		respuesta = os.popen('curl -s "http://' + self.Topico + '/cm?cmnd=' + Comando.replace(' ','%20')+'"').read()
 		#Log('MandaCurl: ' + Comando, True)
 		return respuesta
@@ -1822,9 +1823,8 @@ def Para():
 def PasaaBD(Fichero = '/var/log/placa.log', Debug = False):
 	""" Esta función pasa a una Base de Datos en sqlite3 la información de la placa solar y la bomba obtenida a través del MQTT
 	y volcada en /var/log/placa.log. Una vez renombramos el fichero, pasamos los datos, y los archivamos en un zip.
-	Nos falta también almacenar los de la Bomba, si es que nos interesa de alguna manera.
 	"""
-	import sqlite3
+	import sqlite3, datetime
 	
 	if type(Debug) == str:
 		Debug = eval(Debug)
@@ -1878,6 +1878,23 @@ def PasaaBD(Fichero = '/var/log/placa.log', Debug = False):
 			Encendido = -1
 			contador += 1
 	con.commit()
+	# Ahora procesamos los encendidos de la Bomba
+	Datos = list(filter(None,os.popen("grep -E 'bomba.*POWER = ON' " + Fichero + ' --color=none').read().split('\n')))
+	if Debug:
+		print(Datos)
+	Encendido = 1
+	# Como actualmente no tenemos sensor en la Bomba dejamos el valor a 0
+	Temperatura = 0
+	#Log('Comenzamos la importación de datos de la bomba a la BD en sqlite3 con el primer dato: ' + Datos[0][0:15])
+	for g in Datos:
+		# Convertimos la fecha y hora. Tenemos que tener en cuenta el salto de año puesto que importamos a las 11. ***Pendiente***
+		# Primero le añadimos el año
+		Fecha = g[0:6] + ' ' + str(datetime.datetime.now().year) + ' ' + g[7:15]
+		# Lo importamos a una fecha para sacarlo luego en el formato ISO 8601 de manera automática
+		Fecha = datetime.datetime.strptime(Fecha, '%b %d %Y %H:%M:%S')
+		print(Fecha, Temperatura, Encendido)
+		cursor.execute("INSERT INTO Bomba (Fecha, Temperatura, Encendido) VALUES ('" + str(Fecha) + "', " + str(Temperatura) + ", " + str(Encendido) + ")")
+		contador += 1
 	con.close()
 	# Añadimos el log horario al del día
 	if not esotro:
@@ -1925,27 +1942,11 @@ def Placa(Quehacemos = 4, Tiempo = 0):
 		placa.Controla(Quehacemos, Tiempo = Tiempo)
 	return placa.Temperatura
 
-def Prueba(Param):
+def Prueba(Param, Debug = False):
 	""" Para probar funciones que estamos desarrollando
+		Procesado de los mensajes de la bomba
 	"""
-	# Para copiar ficheros con nombres extraños por culpa de acentos y codigo de página erróneos basándonos en la salida en csv del Teracopy
-	import glob
-	file = open('c:\\users\\hector\\AppData\\Roaming\\TeraCopy\\Reports\\2018.09.11_10-48-56.csv', encoding='iso-8859-1')
-	lista = []
-	for line in file:
-		pp = line.split(',')[2]
-		pp = pp[pp.find('\\') + 1:]
-		lista.append(pp)
-	file.close()
-	lista.remove('Filename')
-	for f in lista:
-		print('Procesando ' + f)
-		capi = Capitulo(f)
-		nuevo = glob.glob('p:\\Series\\' + capi.Serie + '\\' + capi.Serie + ' ' + capi.Temp + 'x' + capi.Capi + '*')
-		#nuevo = input('El nombre actual es: ' + capi.Titulo + ' :')
-		print('Copiando ' + nuevo[0] + ' en ' + 'f:\\Series\\' + capi.Serie + '\\')
-		shutil.copy(nuevo[0], 'f:\\Series\\' + capi.Serie + '\\')
-	#print(type(Param)==str, int(Param))
+	print(type(Param)==str, int(Param))
 	#print(pp.Temp, pp.Estado)
 	return
 
