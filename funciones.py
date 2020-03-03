@@ -2075,14 +2075,14 @@ def RenSerie(P1, P2, Ruta = env.PASADOS, Todo = 0):
 	Renombra(P1, P2)
 	return
 
-def SacaSubs(P1):
+def SacaSubs(P1, Pista = '3'):
 	""" Función encargada de extraer los subtítulos forzados de un fichero mkv para poder verlos en la TV del Salón
 	La creamos a raiz de series como Star Trek Discovery.
 	Empezaremos por adaptarla solo a ésta, que los subtítulos siempre están en la pista 3 (0: vídeo, 1 y 2 audios)
 	pero la idea es hacerla más genérica y que pueda detectar el flag de forzado de manera automática.
 	"""
 	
-	error = os.system('mkvextract tracks "' + P1 + '" 3:"' + P1[:-3] + 'srt"')
+	error = os.system('mkvextract tracks "' + P1 + '" ' + Pista + ':"' + P1[:-3] + 'srt"')
 	return error
 
 def SubCanciones(p1):
