@@ -1,0 +1,1 @@
+sudo mount -t cifs //hector-pc/g /mnt/11/ -o username=hector,iocharset=utf8
