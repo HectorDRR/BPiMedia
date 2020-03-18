@@ -214,7 +214,7 @@ class SonoffTH:
 		mes = mes - 9
 	# A partir de Enero y hasta Mayo, aumentamos los 3º anteriores + 1
 	else:
-		if mes < 6 :
+		if mes < 5 :
 			mes = 3 + mes
 		else:
 			mes = 0
@@ -1924,7 +1924,8 @@ def Placa(Quehacemos = 4, Tiempo = 0):
 			if int(time.strftime('%H%M')) > 2144:
 				os.remove('/tmp/TodosBañados')
 				Log('Borramos TodosBañados')
-			Log('Ya se han bañado todos así que no activamos placa')
+			else:
+				Log('Ya se han bañado todos así que no activamos placa')
 			return
 		# Comprobamos si está corriendo ya el control de la placa. En caso de que no lo esté solo devolverá 3 procesos: el bash que lanza el cron, el de Botones y el pgrep
 		# Si lo está devuelve 4 en caso de que se haya lanzado por el cron, lo más habitual
