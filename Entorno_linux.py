@@ -38,6 +38,6 @@ ATTRIB = 'chmod '
 
 # Constantes del sistema que pueden variar a lo largo del año
 # Consigna de temperatura de la placa
-TEMPERATURA = 35
+TEMPERATURA = 33
 # Tiempo de funcionamiento de la bomba
 TBOMBA = 60
