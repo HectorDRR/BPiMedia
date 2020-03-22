@@ -434,10 +434,10 @@ def BajaSeries(Batch = False, Debug = False):
 	Debug = (Debug == 'True')
 	# Abrimos la conexión por ssh
 	#client = paramiko.SSHClient()
-	client = paramiko.Transport(('hrr.no-ip.info', 2222))
 	#client.load_system_host_keys()
 	#client.set_missing_host_key_policy(paramiko.WarningPolicy)
     #client.connect('hrr.no-ip.info', port = 2222, username = claves.FTPMulitaUser, password = claves.FTPMulitaPasswd)
+	client = paramiko.Transport(('hrr.no-ip.info', 2222))
 	client.connect(username = claves.FTPMulitaUser, password = claves.FTPMulitaPasswd)
 	# Ahora realizamos la conexión al servidor FTP
 	ftp = FTP()
@@ -452,6 +452,7 @@ def BajaSeries(Batch = False, Debug = False):
 	os.system('dir /b /ad >ver.txt')
 	lista = ftp.nlst()
 	print(lista)
+	session = client.open_channel(kind='session')
 	for f in lista:
 		capi = Capitulo(f, ftp)
 		# Si no es una serie o no está en la lista, la movemos a otros y pasamos al siguiente
@@ -467,9 +468,9 @@ def BajaSeries(Batch = False, Debug = False):
 		# A partir de aquí hemos de usar capi.Todo por si el nombre ha cambiado
 		# Si no es de las que seguimos en el curro
 		if not capi.Vemos():
-			# Cambiamos atributos para marcarla como bajada. Pendiente leerlos primero para solo cambiar el primero
+			# Cambiamos atributos para marcarla como bajada.
 			#ftp.sendcmd('SITE CHMOD 766 ' + capi.Todo)
-			session = client.open_channel(kind='session')
+			#session = client.open_channel(kind='session')
 			session.exec_command('chmod u+x "Series/' + capi.Todo + '"')
 			# Lo movemos a su carpeta
 			Log('Movemos ' + capi.Todo + ' a su carpeta', Debug)
@@ -493,7 +494,7 @@ def BajaSeries(Batch = False, Debug = False):
 			if ftp.retrbinary('RETR ' + capi.Todo, file.write, 10240) == '226 Transfer complete.':
 				# Cambiamos atributos para marcarla como bajada. Pendiente leerlos primero para solo cambiar el primero
 				#ftp.sendcmd('SITE CHMOD 766 ' + capi.Todo)
-				session = client.open_channel(kind='session')
+				#session = client.open_channel(kind='session')
 				session.exec_command('chmod u+x "Series/' + capi.Todo + '"')
 				# Lo movemos a su carpeta
 				Log('Lo movemos a ' + destino + capi.Serie + '/', Debug)
@@ -501,8 +502,11 @@ def BajaSeries(Batch = False, Debug = False):
 		# Volvemos a la carpeta de pasados
 		os.chdir('..')
 	# Mandamos al amule a refrescar la ubicación de los ficheros compartidos
-	session = client.open_channel(kind='session')
+	#session = client.open_channel(kind='session')
 	session.exec_command('/home/hector/bin/compartidos')
+	# Cerramos conexiones para que no haya timeouts al descargar las pelis
+	session.close()
+	client.close()
 	Log('Salida del "compartidos":' + session.recv(2048).decode('ascii'))
 	# Nos vamos a las Pelis
 	os.chdir(env.HD)
@@ -534,13 +538,16 @@ def BajaSeries(Batch = False, Debug = False):
 				# Cambiamos atributos para marcarla como bajada. Pendiente leerlos primero para solo cambiar el primero
 				# ftp.sendcmd('SITE CHMOD 766 ' + f)
 				#stdin, stdout, stderr = client.exec_command('chmod u+x HD/' + f)
+				# Abrimos conexión al terminar cada peli puesto que algunas tardan demasiado y estaban causando timeouts
+				client = paramiko.Transport(('hrr.no-ip.info', 2222))
+				client.connect(username = claves.FTPMulitaUser, password = claves.FTPMulitaPasswd)
 				session = client.open_channel(kind='session')
 				session.exec_command('chmod u+x "HD/' + f + '"')
+				session.close()
+				client.close()
 	Log('Hemos temrinado con las pelis  y cerramos')
 	# Cerramos la conexión
 	ftp.close()
-	session.close()
-	client.close()
 	return
 
 def Bomba(Debug = False):
@@ -622,7 +629,7 @@ def Borra(Liberar = 30, Dias = 20, Auto = 0):
 	# Sacamos la lista de ficheros con mas de 30 días de antiguedad y que los permisos 
 	# indican que ya ha sido copiado a disco externo
 	os.chdir(env.PASADOS)
-	salida = os.popen('find . -type f -mtime +' + str(Dias) + ' -perm 644 ! -iname "*.jpg"|sort').read()
+	salida = os.popen('find . -type f -mtime +' + str(Dias) + ' -perm -u+rw ! -iname "*.jpg"|sort').read()
 	# Leemos la lista de ficheros con más de 30 días. Filtramos los campos nulos que suelen quedar al final
 	# de la salida y lo convertimos a lista puesto que filter saca un 'iterable'
 	lista = sorted(filter(None, salida.split('\n')))
@@ -772,6 +779,9 @@ def Copia():
 	
 	# Designamos las carpetas que copiar
 	rutas = ['/home/hector/bin', '/mnt/e/util', '/mnt/f', '/mnt/f/scripts', '/mnt/e/.mini']
+	# Creamos la copia de los bookmarks del minidlna
+	os.system('sqlite3 /mnt/e/.mini/files.db "select path,sec,duration from bookmarks inner join details on bookmarks.id=details.id where path like \'/mnt/e/pasados/%\' order by path;" >/mnt/e/.mini/Bookmarks.txt')
+
 	# Abrimos la conexión FTP
 	ftp = FTP()
 	ftp.connect('files.000webhost.com', 21)
@@ -1921,7 +1931,7 @@ def Placa(Quehacemos = 4, Tiempo = 0):
 		# En caso de habernos bañado todos podemos crear un fichero en /tmp para que no se lance más. Comprobamos la existencia de dicho fichero
 		# y en caso de que exista salimos, pero antes comprobamos si es la última activación en la noche (21:45) en ese caso, antes de salir, lo borramos
 		if os.path.exists('/tmp/TodosBañados'):
-			if int(time.strftime('%H%M')) > 2144:
+			if (int(time.strftime('%H%M')) > 2144 or (int(time.strftime('%H%M')) > 755 and int(time.strftime('%H%M')) < 801)):
 				os.remove('/tmp/TodosBañados')
 				Log('Borramos TodosBañados')
 			else:
@@ -1979,7 +1989,7 @@ def ReiniciaDLNA():
 	# Creamos cursor
 	mini_cursor = mini_db.cursor()
 	# Obtenemos la lista de bookmarks activos
-	mini_cursor.execute("SELECT path,sec FROM bookmarks INNER JOIN details ON bookmarks.id=details.id")
+	mini_cursor.execute("select path,sec,duration from bookmarks inner join details on bookmarks.id=details.id where path like '/mnt/e/pasados/%' order by path;")
 	# Guardamos esta tabla
 	Marcadores = mini_cursor.fetchall()
 	# Cerramos el cursor y la BD

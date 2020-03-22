@@ -4,6 +4,7 @@
 Al amazon elimnar estos boes y forzar su bloqueo de manera remota, solo se usa para detectar la conexión de los equipos de Dácil
 y de cualquier otra MAC que queramos detectar y reflejar en el log.
 Ampliamos su uso para incluir un cliente de MQTT para poder hacer que la placa no se active más cuando ya nos hayamos duchado los tres
+o para volver a activarla
 
 Hay que lanzarla con privilegios para poder poner la red en modo promiscuo y detectar la MAC de los equipos
 Se requiere de una segunda función, Boton_detecta, que es la que se dispara cuando se detecta una llamada ARP
@@ -17,9 +18,6 @@ import paho.mqtt.client as mqtt
 
 # Definición de variables para hacer la macro portable entre distintas configuraciones/plataformas
 env = __import__('Entorno_' + sys.platform)
-
-# Para no repetir botón en un corto periodo de tiempo o log de conexión de equipo de Dácil
-ultimo = ['',datetime.datetime.now()]
 
 def Boton_detecta(pkt):
 	""" Función para detectar cuando Dácil conecta alguno de sus aparatos
@@ -42,37 +40,38 @@ def Leo_Boton(client, userdata, message):
 		Como solo esperamos un mensaje, solo procedemos a realizar la acción sin ningún control adicional
 	"""
 	#import json
-
 	# Lo importamos en formato json
 	#mensaje = json.loads(message.payload.decode("utf-8"))
 	#if Debug:
 		#Log('Debug, mensaje: ' + str(mensaje))
 	# Llamamos a bin/bañados.sh que termina con el proceso de la placa, si está corriendo, crea el fichero '/tmp/TodosBañados' y para la placa
-	Log('No se va a bañar nadie más, ' + str(os.system('/home/hector/bin/bañados.sh')))
+	if not os.path.exists('/tmp/TodosBañados'):
+		Log('No se va a bañar nadie más, ' + str(os.system('/home/hector/bin/bañados.sh')))
+		client.publish('stat/boton2/NOMAS','1')
+	else:
+		Log('Volvemos a activar la programación de la placa, ', os.remove('/tmp/TodosBañados')
+		client.publish('stat/boton2/NOMAS','0')
 	return
 
 
-if __name__ == "__main__":
-	""" En caso de que haya un parámetro activamos el debugging
-	"""
-	if len(sys.argv) == 2:
-		Debug = True
-	else:
-		Debug = False
-	# Creo el cliente
-	client = mqtt.Client('Mulita')
-	# Conecto al broker
-	client.connect('192.168.1.8')
-	# Asigno la función que va a procesar los mensajes recibidos
-	client.on_message = Leo_Boton
-	# Lo despertamos de su letargo para que nos responda más rápido, ya que hemos observado que con el sleep activado tarda más tiempo
-	#client.publish('cmnd/' + Topico + '/SLEEP', '0')
-	# Me subscribo a los tópicos necesarios, Estado y Temperatura
-	client.subscribe('stat/boton2/NOMAS', 0)
-	# Comenzamos el bucle
-	client.loop_start()
+if len(sys.argv) == 2:
+	Debug = True
+else:
+	Debug = False
+# Creo el cliente
+client = mqtt.Client('Mulita')
+# Conecto al broker
+client.connect('192.168.1.8')
+# Asigno la función que va a procesar los mensajes recibidos
+client.on_message = Leo_Boton
+# Lo despertamos de su letargo para que nos responda más rápido, ya que hemos observado que con el sleep activado tarda más tiempo
+#client.publish('cmnd/' + Topico + '/SLEEP', '0')
+# Me subscribo a los tópicos necesarios, Estado y Temperatura
+client.subscribe('cmnd/boton2/NOMAS', 0)
+# Comenzamos el bucle
+client.loop_start()
 
-	# Lanzamos el bucle que se queda detectando las llamadas ARP. Este funcionará de manera ininterrumpida
-	# Hay que lanzarlo con el arranque del equipo. 
-	# Plantear su instalación en el router en vez de la mulita
-	sniff(prn=Boton_detecta, filter="arp", store=0)
+# Lanzamos el bucle que se queda detectando las llamadas ARP. Este funcionará de manera ininterrumpida
+# Hay que lanzarlo con el arranque del equipo. 
+# Plantear su instalación en el router en vez de la mulita
+sniff(prn=Boton_detecta, filter="arp", store=0)
