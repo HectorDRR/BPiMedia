@@ -343,7 +343,7 @@ class SonoffTH:
 						for f in range(0, Tiempo // 360, 1):
 							#self.client.publish('cmnd/' + self.Topico + '/BACKLOG', 'POWER ON;DELAY 3600;POWER OFF')
 							self.MandaCurl('BACKLOG POWER ON;DELAY 3600;POWER OFF')
-							time.sleep(362)
+							time.sleep(365)
 							# Para ir monitorizando, vamos pasando al log la temperatura
 							Log('Temperatura de la ' + self.Topico + ': ' + str(self.LeeTemperatura()) + 'º', self.Debug)
 							#if self.Temperatura >= TMax:
@@ -452,7 +452,7 @@ def BajaSeries(Batch = False, Debug = False):
 	os.system('dir /b /ad >ver.txt')
 	lista = ftp.nlst()
 	print(lista)
-	session = client.open_channel(kind='session')
+	#session = client.open_channel(kind='session')
 	for f in lista:
 		capi = Capitulo(f, ftp)
 		# Si no es una serie o no está en la lista, la movemos a otros y pasamos al siguiente
@@ -470,7 +470,7 @@ def BajaSeries(Batch = False, Debug = False):
 		if not capi.Vemos():
 			# Cambiamos atributos para marcarla como bajada.
 			#ftp.sendcmd('SITE CHMOD 766 ' + capi.Todo)
-			#session = client.open_channel(kind='session')
+			session = client.open_channel(kind='session')
 			session.exec_command('chmod u+x "Series/' + capi.Todo + '"')
 			# Lo movemos a su carpeta
 			Log('Movemos ' + capi.Todo + ' a su carpeta', Debug)
@@ -502,7 +502,7 @@ def BajaSeries(Batch = False, Debug = False):
 		# Volvemos a la carpeta de pasados
 		os.chdir('..')
 	# Mandamos al amule a refrescar la ubicación de los ficheros compartidos
-	#session = client.open_channel(kind='session')
+	session = client.open_channel(kind='session')
 	session.exec_command('/home/hector/bin/compartidos')
 	# Cerramos conexiones para que no haya timeouts al descargar las pelis
 	session.close()
@@ -781,7 +781,6 @@ def Copia():
 	rutas = ['/home/hector/bin', '/mnt/e/util', '/mnt/f', '/mnt/f/scripts', '/mnt/e/.mini']
 	# Creamos la copia de los bookmarks del minidlna
 	os.system('sqlite3 /mnt/e/.mini/files.db "select path,sec,duration from bookmarks inner join details on bookmarks.id=details.id where path like \'/mnt/e/pasados/%\' order by path;" >/mnt/e/.mini/Bookmarks.txt')
-
 	# Abrimos la conexión FTP
 	ftp = FTP()
 	ftp.connect('files.000webhost.com', 21)
@@ -2128,8 +2127,8 @@ def SubCanciones(p1):
 	lista.save(p1[:-3] + 'for.srt', encoding='iso-8859-1')
 	return
 
-def Temperatura(Cada = 2, Cual = 'Temperatura'):
-	""" Se encarga de crear una gráfica con la temperatura del agua en la placa solar de las últimas 24h y la última hora
+def Temperatura(Cada = 1, Cual = 'Temperatura'):
+	""" Se encarga de crear una gráfica con la temperatura del agua en la placa solar de la última semana
 	"""
 	import sqlite3, datetime
 	# Importamos los últimos datos a la BD
@@ -2137,21 +2136,59 @@ def Temperatura(Cada = 2, Cual = 'Temperatura'):
 	# Cargamos los datos excluyendo los de la Bomba, por ahora
 	bd = sqlite3.connect('/mnt/e/.mini/placa.db')
 	cursor = bd.cursor()
-	
 	# Obtenemos la fecha de ayer para sacar los de las últimas 24 horas
 	fecha = datetime.datetime.now()
-	# Obtenemos cuantos minutso ha estado encedida la placa este mes
-	Activo = list(cursor.execute("select count(Encendido)*5 from placa where encendido=1 and fecha>'" + str(fecha.year) + "-" + fecha.strftime('%m') + "-00'"))[0][0]
-	fecha = fecha - datetime.timedelta(days = 1, minutes = 10)
-	datos = cursor.execute("Select * From placa Where Fecha > '" + fecha.strftime('%Y-%m-%d %H:%M') + "'")
-	Temperatura_CreaWeb(datos, Cada, Cual, Activo)
-	# Ahora obtenemos los datos de la última hora, dando un margen de 10 minutos
-	fecha = datetime.datetime.now() - datetime.timedelta(hours = 1, minutes = 10)
-	datos = cursor.execute("Select * From placa Where Fecha > '" + fecha.strftime('%Y-%m-%d %H:%M') + "'")
-	Temperatura_CreaWeb(datos, 1, 'TemperaturaH', Activo)
+	# Obtenemos cuantos minutos ha estado encedida la placa este mes
+	Activo = list(cursor.execute("select count(Encendido)*5 from placa where encendido=1 and fecha like '" + fecha.strftime('%Y-%m-%%') + "'"))[0][0]
+	# Retrocedemos una semana
+	fecha = fecha - datetime.timedelta(days = 7)
+	# Añadimos el .fetchall() para pasar los datos como una lista y no seguir usando el cursor
+	datos = cursor.execute("Select * From placa Where Fecha > '" + fecha.strftime('%Y-%m-%d %H:%M') + "'").fetchall()
 	# Cerramos la base de datos
 	bd.close()
-	#Log('Generamos  la página de curva de temperatura')
+	with open(env.WEB + Cual + '.csv', 'w') as file:
+		# Escribo cabeceras
+		file.writelines('Hora,Temperatura,Activo\n')
+		for f in datos:
+			# Para que funcione la gráfica correctamente, ponemos a None cuando está apagada e igualamos a la temperatura 
+			# cuando está encendida. De esta manera se superpone en la gráfica sobre la temperatura en rojo cuando está activa
+			if f[2] == 1:
+				acti = f[1]
+			else:
+				acti = None
+			file.writelines(f[0] + ',' + str(f[1]) + ',' + str(acti) + '\n')
+	return
+
+def Temperatura_Anual(Cual = 'TemperaturaA'):
+	""" Se encarga de crear una gráfica con la temperatura mínima, media y máxima del agua a las 18:000 en la placa solar de
+		cada mes del último año y también el timepo que ha estado encendida.
+	"""
+	import sqlite3, datetime, dateutil.relativedelta
+	# Cargamos los datos excluyendo los de la Bomba, por ahora
+	bd = sqlite3.connect('/mnt/e/.mini/placa.db')
+	cursor = bd.cursor()
+	# Obtenemos la fecha
+	fecha = datetime.datetime.now()
+	# Creamos la tabla que va a almacenar todos los valores, Min, Media, Max y Activo
+	Valores = [[]]
+	# Limpiamos para que no se nos quede el primer elemento vacío y podamos meterla en el bucle
+	Valores.clear()
+	# Hacemos bucle yendo desde hace 2 años hacia adelante, de manera que podremos comparar el mes pasado con el de hace un año
+	for f in range(25,0,-1):
+		# Retrocedemos en el tiempo
+		EsteMes = fecha - dateutil.relativedelta.relativedelta(months = f)
+		# Obtenemos la Tª mínima, media y máxima a las 18:0%
+		Valores.append(list(cursor.execute("select  Min(Temperatura), Round(Avg(Temperatura),1), Max(Temperatura) from placa where fecha like '" + EsteMes.strftime('%Y-%m-__ 18:0%%') + "'"))[0])
+		# Obtenemos cuantos minutos ha estado encedida la placa cada mes
+		Valores[25-f] = Valores[25-f], list(cursor.execute("select count(Encendido)*5 from placa where encendido=1 and fecha like '" + EsteMes.strftime('%Y-%m-%%') + "'"))[0][0], EsteMes.strftime('%Y%m15')
+	# Cerramos la base de datos
+	bd.close()
+	# Creamos el fichero de datos
+	with open(env.WEB + Cual + '.csv', 'w') as file:
+		# Escribo cabeceras
+		file.writelines('Mes,Mínima,Media,Máxima,Horas_Activa\n')
+		for f in Valores:
+			file.writelines(str(f[2]) + ',' + str(f[0][0]) + ',' + str(f[0][1]) + ',' + str(f[0][2]) + ',' + str(round(f[1]/60,1)) + '\n')
 	return
 
 def Temperatura_CreaWeb(Datos, Cada = 2, Cual = 'Temperatura', Activo = 0):
