@@ -773,6 +773,7 @@ def Clasifica(Carpeta = './'):
 
 def Copia():
 	"""Se encarga de realizar una copia del contenido de varias carpetas modificado desde ayer al ftp de Movelcan
+		También lanza una macro, rcopias.sh, para usar el rclone y copiar el contenido al Google Drive
 	"""
 	from ftplib import FTP
 	import claves
@@ -803,7 +804,9 @@ def Copia():
 			# Una vez transferido, lo eliminamos. Falta hacer un chequeo para comprobar que se ha subido correctamente
 			os.remove('/tmp/' + carpeta)
 	ftp.close()
-	return
+	# Lanzamos el rcopias.sh
+	devuelve = os.system('/home/hector/bin/rcopias.sh')
+	return devuelve
 
 def CopiaNuevas(Pen):
 	""" Se encarga de copiar las pelis o series nuevas desde el pen a las carpetas que tengo en metal para distribuir 
