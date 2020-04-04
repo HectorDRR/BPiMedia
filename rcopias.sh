@@ -12,10 +12,10 @@ if [ $? -eq 1 ]
 	then
 		cp -y /tmp/crontab.txt /home/hector/bin/
 fi
-rclone sync /home/hector/bin Drive:Odroid/bin --exclude "__pycache__/*" --exclude ".git/**" 
-rclone sync /mnt/f Drive:Odroid/f
-rclone sync /mnt/e/util Drive:Odroid/util
-rclone sync /mnt/e/.mini Drive:Odroid/.mini --exclude "art_cache/**"
+rclone sync /home/hector/bin Drive:Odroid/bin --exclude "__pycache__/*" --exclude ".git/**" -v
+rclone sync /mnt/f Drive:Odroid/f -v
+rclone sync /mnt/e/util Drive:Odroid/util -v
+rclone sync /mnt/e/.mini Drive:Odroid/.mini --exclude "art_cache/**" -v
 echo `date +%d/%m/%Y\ %H:%M:%S` [copias.sh] Terminada la copia al Google drive. Tamaño ocupado de bin, f, util y .mini:>>/mnt/e/.mini/milog.txt
 rclone size Drive:Odroid/bin>>/mnt/e/.mini/milog.txt
 rclone size Drive:Odroid/f>>/mnt/e/.mini/milog.txt
