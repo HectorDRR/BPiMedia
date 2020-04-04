@@ -2128,7 +2128,8 @@ def SubCanciones(p1):
 	return
 
 def Temperatura(Cada = 1, Cual = 'Temperatura'):
-	""" Se encarga de crear una gráfica con la temperatura del agua en la placa solar de la última semana
+	""" Se encarga de crear una gráfica con la temperatura del agua en la placa solar de la última semana y un fichero de texto
+		con el tiempo que ha estado la placa activa en el mes en curso.
 	"""
 	import sqlite3, datetime
 	# Importamos los últimos datos a la BD
@@ -2139,7 +2140,11 @@ def Temperatura(Cada = 1, Cual = 'Temperatura'):
 	# Obtenemos la fecha de ayer para sacar los de las últimas 24 horas
 	fecha = datetime.datetime.now()
 	# Obtenemos cuantos minutos ha estado encedida la placa este mes
-	Activo = list(cursor.execute("select count(Encendido)*5 from placa where encendido=1 and fecha like '" + fecha.strftime('%Y-%m-%%') + "'"))[0][0]
+	activo = list(cursor.execute("select count(Encendido)*5 from placa where encendido=1 and fecha like '" + fecha.strftime('%Y-%m-%%') + "'"))[0][0]
+	# Lo pasamos a horas y minutos
+	activo = f'{activo // 60:02}:{activo % 60:02}'
+	with open(env.WEB + 'Activo.txt', 'w') as file:
+		file.writelines(activo)
 	# Retrocedemos una semana
 	fecha = fecha - datetime.timedelta(days = 7)
 	# Añadimos el .fetchall() para pasar los datos como una lista y no seguir usando el cursor
@@ -2150,12 +2155,12 @@ def Temperatura(Cada = 1, Cual = 'Temperatura'):
 		# Escribo cabeceras
 		file.writelines('Hora,Temperatura,Activo\n')
 		for f in datos:
-			# Para que funcione la gráfica correctamente, ponemos a None cuando está apagada e igualamos a la temperatura 
+			# Para que funcione la gráfica correctamente, ponemos a '' cuando está apagada e igualamos a la temperatura 
 			# cuando está encendida. De esta manera se superpone en la gráfica sobre la temperatura en rojo cuando está activa
 			if f[2] == 1:
 				acti = f[1]
 			else:
-				acti = None
+				acti = ''
 			file.writelines(f[0] + ',' + str(f[1]) + ',' + str(acti) + '\n')
 	return
 
