@@ -805,7 +805,7 @@ def Copia():
 			os.remove('/tmp/' + carpeta)
 	ftp.close()
 	# Lanzamos el rcopias.sh
-	devuelve = os.system('/home/hector/bin/rcopias.sh')
+	devuelve = os.system('/home/hector/bin/rcopias.sh >>/tmp/salcopias.txt')
 	return devuelve
 
 def CopiaNuevas(Pen):
@@ -1912,7 +1912,7 @@ def PasaaBD(Fichero = '/var/log/placa.log', Debug = False):
 	if not esotro:
 		os.system('cat ' + Fichero + ' >> placa_' + time.strftime('%Y%m%d') + '.log && rm ' + Fichero)
 	# Si es el último de la noche, lo movemos al zip de los logs 
-	if time.strftime('%H') == '23':
+	if time.strftime('%H%M') == '2330':
 		os.system('zip -m logs.zip placa_' + time.strftime('%Y%m%d') + '.log')
 		Log('Terminamos por hoy la importación de datos del log de la Placa a la BD con el ' + f[0:15] + '  y hemos importado ' + str(contador) + ' valores y comprimido el log')
 
