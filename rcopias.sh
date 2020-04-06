@@ -7,7 +7,7 @@
 echo `date +%d/%m/%Y\ %H:%M:%S` [copias.sh] Empezamos la copia al Google drive>>/mnt/e/.mini/milog.txt
 # Generamos el crontab en /tmp para compararlo con el guardado. Si ha cambiado machacamos el que hay en bin para que se copie
 crontab -l >/tmp/crontab.txt
-diff /home/hector/bin/crontab.txt /tmp/crontab.txt
+diff /home/hector/bin/crontab.txt /tmp/crontab.txt >dev/null
 if [ $? -eq 1 ]
 	then
 		cp -y /tmp/crontab.txt /home/hector/bin/
