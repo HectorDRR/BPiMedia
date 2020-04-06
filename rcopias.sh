@@ -10,7 +10,7 @@ crontab -l >/tmp/crontab.txt
 diff /home/hector/bin/crontab.txt /tmp/crontab.txt >dev/null
 if [ $? -eq 1 ]
 	then
-		cp -y /tmp/crontab.txt /home/hector/bin/
+		cp /tmp/crontab.txt /home/hector/bin/crontab.txt
 fi
 rclone sync /home/hector/bin Drive:Odroid/bin --exclude "__pycache__/*" --exclude ".git/**" -v
 rclone sync /mnt/f Drive:Odroid/f -v
