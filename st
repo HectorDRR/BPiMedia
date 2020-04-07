@@ -4,6 +4,10 @@ function Series {
 uptime
 free -h
 echo Temperatura: `cat /sys/class/thermal/thermal_zone0/temp`
+if [ $1p == sp ];
+	then Series;
+	exit;
+fi
 ~/bin/venus.sh
 echo Temperatura del agua: `curl -s http://placa/cm?cmnd=Status%2010|cut -c 89-92`
 echo Estado de la placa: `curl -s http://placa/cm?cmnd=POWER|cut -c 11-`
@@ -19,10 +23,6 @@ if [ $tam -lt 10 ]
 	else echo -e "Quedan \e[92m$tam \e[0m GB libres en /mnt/e"
 fi
 echo .
-if [ $1p == sp ];
-	then Series;
-	exit;
-fi
 cat /mnt/e/util/quedan.txt
 if [ -a /media/Series ]
     then
