@@ -7,17 +7,19 @@
 echo `date +%d/%m/%Y\ %H:%M:%S` [copias.sh] Empezamos la copia al Google drive>>/mnt/e/.mini/milog.txt
 # Generamos el crontab en /tmp para compararlo con el guardado. Si ha cambiado machacamos el que hay en bin para que se copie
 crontab -l >/tmp/crontab.txt
-diff /home/hector/bin/crontab.txt /tmp/crontab.txt >dev/null
+diff /home/hector/bin/crontab.txt /tmp/crontab.txt >/dev/null
 if [ $? -eq 1 ]
 	then
 		cp /tmp/crontab.txt /home/hector/bin/crontab.txt
 fi
-rclone sync /home/hector/bin Drive:Odroid/bin --exclude "__pycache__/*" --exclude ".git/**" -v
-rclone sync /mnt/f Drive:Odroid/f -v
-rclone sync /mnt/e/util Drive:Odroid/util -v
-rclone sync /mnt/e/.mini Drive:Odroid/.mini --exclude "art_cache/**" -v
+for f in /home/hector/bin /mnt/f /mnt/e/util /mnt/e/.mini; do 
+	rclone sync $f Drive:Odroid/${f##*/} --exclude "art_cache/**" --exclude "__pycache__/*" --exclude ".git/**" -v --log-file /tmp/salcopias.txt
+done
+#rclone sync /home/hector/bin Drive:Odroid/bin --exclude "__pycache__/*" --exclude ".git/**" -v --log-file /tmp/salcopias.txt
+#rclone sync /mnt/f Drive:Odroid/f -v --log-file /tmp/salcopias.txt
+#rclone sync /mnt/e/util Drive:Odroid/util -v --log-file /tmp/salcopias.txt
+#rclone sync /mnt/e/.mini Drive:Odroid/.mini --exclude "art_cache/**" -v --log-file /tmp/salcopias.txt
 echo `date +%d/%m/%Y\ %H:%M:%S` [copias.sh] Terminada la copia al Google drive. Tamaño ocupado de bin, f, util y .mini:>>/mnt/e/.mini/milog.txt
-rclone size Drive:Odroid/bin>>/mnt/e/.mini/milog.txt
-rclone size Drive:Odroid/f>>/mnt/e/.mini/milog.txt
-rclone size Drive:Odroid/util>>/mnt/e/.mini/milog.txt
-rclone size Drive:Odroid/.mini>>/mnt/e/.mini/milog.txt
+for f in /home/hector/bin /mnt/f /mnt/e/util /mnt/e/.mini; do 
+	rclone size Drive:Odroid/${f##*/}>>/mnt/e/.mini/milog.txt
+done

@@ -619,7 +619,7 @@ def BombaConSensor(Debug = False):
 	Log('Después de 150 segundos más la temperatura es de ' + str(bomba.LeeTemperatura()) + 'º')
 	return
 
-def Borra(Liberar = 30, Dias = 20, Auto = 0):
+def Borra(Liberar = 50, Dias = 20, Auto = 0):
 	"""Se encarga de liberar espacio eliminando los ficheros más viejos que hay en las series sin
 	contar los que están en las series que vemos (env.SERIESVER) Por defecto, liberará 20 GB.
 	Añadimos un parámetro Auto para poder lanzarlo de manera automática desde Discolleno cuando 
@@ -694,7 +694,7 @@ def Borra2(borrar, Liberar, Preg=False):
 			Log('Se borró correctamente ' + f, True)
 	return libre
 
-def BorraVistos(Liberar = 30):
+def BorraVistos(Liberar = 50):
 	""" Se encarga de hacer una lista con los ficheros que se han visto de 'pasados' para luego poder proceder a borrarlos.
 		La TV Samsung modifica un campo bookmark para poder recordar por donde íbamos, que marca los segundos transcurridos desde el inicio
 		o en caso de que se haya visto hasta el final, pone un 0 en dicho Bookmark. Esto nos crea un pequeño conflicto, ya que en algunas ocasiones
@@ -805,7 +805,7 @@ def Copia():
 			os.remove('/tmp/' + carpeta)
 	ftp.close()
 	# Lanzamos el rcopias.sh
-	devuelve = os.system('/home/hector/bin/rcopias.sh >>/tmp/salcopias.txt')
+	devuelve = os.system('/home/hector/bin/rcopias.sh')
 	return devuelve
 
 def CopiaNuevas(Pen):
