@@ -781,7 +781,7 @@ def Copia():
 	# Designamos las carpetas que copiar
 	rutas = ['/home/hector/bin', '/mnt/e/util', '/mnt/f', '/mnt/f/scripts', '/mnt/e/.mini']
 	# Creamos la copia de los bookmarks del minidlna
-	os.system('sqlite3 /mnt/e/.mini/files.db "select path,sec,duration from bookmarks inner join details on bookmarks.id=details.id where path like \'/mnt/e/pasados/%\' order by path;" >/mnt/e/.mini/Bookmarks.txt')
+	os.system('sqlite3 /mnt/e/.mini/files.db "select title,sec from bookmarks inner join details on bookmarks.id=details.id where path like \'/mnt/e/pasados/%\' order by path;" >/mnt/e/.mini/Bookmarks.txt')
 	# Abrimos la conexión FTP
 	ftp = FTP()
 	ftp.connect('files.000webhost.com', 21)
@@ -1960,6 +1960,8 @@ def Prueba(Param, Debug = False):
 		Procesado de los mensajes de la bomba
 	"""
 	print(type(Param)==str, int(Param))
+	if Debug:
+		print(Debug)
 	#print(pp.Temp, pp.Estado)
 	return
 
@@ -1976,38 +1978,53 @@ def Queda(Fichero, Destino, FTP = False):
 		return False
 	return True
 
-def ReiniciaDLNA():
-	""" *En OBRAS* Función para reiniciar el MiniDLNA en caso de ficheros corruptos pero manteniendo los bookmarks de los ficheros exitentes
+def ReiniciaDLNA(Debug = False):
+	""" Función para reiniciar el MiniDLNA en caso de ficheros corruptos pero manteniendo los bookmarks de los ficheros exitentes
 	También aprovecharemos para reiniciar el art_cache
 	"""
 	import sqlite3
 	
-	# Paramos servicio
-	os.system('sudo service minidlna stop')
-	# Eliminamos el art_cache
-	os.system('sudo rm -r /mnt/e/.mini/art_cache')
+	if not Debug:
+		# Paramos servicio
+		os.system('sudo service minidlna stop')
+		# Eliminamos el art_cache
+		os.system('sudo rm -r /mnt/e/.mini/art_cache')
 	# Abrimos BD
 	mini_db = sqlite3.connect('/mnt/e/.mini/files.db')
 	# Creamos cursor
 	mini_cursor = mini_db.cursor()
+	# Obtenemos la lista de bookmarks activos. Asumimos que la BD está aún accesible, si no, tendríamos que recurrir al fichero Bookmarks.txt
+	marcadores = mini_cursor.execute("select title,sec from bookmarks inner join details on bookmarks.id=details.id where path like '/mnt/e/pasados/%' order by path;").fetchall()
+	# Cerramos el cursor y la BD ya que tenemos que dejar que el servicio la reinicie
+	mini_cursor.close()
+	mini_db.close()
+	if Debug:
+		print(marcadores)
+	else:
+		# Lanzamos el minidlna en modo restauración de la BD
+		os.system('sudo minidlnad -R')
+		# Ahora tenemos que esperar hasta que en el log indique que ha terminado la indexación
+		mini_log = ''
+		while not 'Finished parsing playlists' in mini_log:
+			time.sleep(15)
+			mini_log = os.system('tail -1 /mnt/e/.mini/minidlna.log').read()
+	# Rehacemos la tabla de bookmarks
+	mini_db = sqlite3.connect('/mnt/e/.mini/files.db')
+	# Creamos cursor
+	mini_cursor = mini_db.cursor()
 	# Obtenemos la lista de bookmarks activos
-	mini_cursor.execute("select path,sec,duration from bookmarks inner join details on bookmarks.id=details.id where path like '/mnt/e/pasados/%' order by path;")
-	# Guardamos esta tabla
-	Marcadores = mini_cursor.fetchall()
+	for f in marcadores:
+		id = mini_cursor.execute('select id from details where title = "' + f[0] + '"').fetchone()[0]
+		if Debug:
+			print('insert into bookmarks (id, sec) values (' + str(id) + ', ' + str(f[1]) + ')')
+		else:
+			mini_cursor.execute('insert into bookmarks (id, sec) values (' + id + ', ' + f[1] + ')')
+	marcadores = mini_cursor.execute("select title,sec from bookmarks inner join details on bookmarks.id=details.id where path like '/mnt/e/pasados/%' order by path;").fetchall()
 	# Cerramos el cursor y la BD
 	mini_cursor.close()
 	mini_db.close()
-	# Lanzamos el minidlna en modo restauración de la BD
-	os.system('sudo minidlnad -R')
-	# Ahora tenemos que esperar hasta que en el log indique que ha terminado la indexación
-	mini_log = ''
-	while not 'Finished parsing playlists' in mini_log:
-		time.sleep(15)
-		mini_log = os.system('tail -1 /mnt/e/.mini/minidlna.log').read()
-	# Terminamos el proceso minidlna de reindexado
-	#os.system('kill minidlnad')
-	
-	return True
+	# Devolvemos los marcadores creados
+	return marcadores
 
 def Renombra(Viejo, Nuevo):
 	""" Función para renombrar los capítulos de una serie de manera que mantengan una nomenclatura homogénea
