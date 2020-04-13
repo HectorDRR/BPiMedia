@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """Definiciones de rutas y variables para hacer el programa portable entre distintas plataformas/configuraciones
 """
+#BD de películas y series
+BD = '/mnt/e/.mini/cine.db'
 #Pelis en HD
 HD = '/mnt/e/HD/'
 #Disco externo donde guardar las pelis HD

@@ -200,6 +200,94 @@ class Capitulo:
 			os.chmod(self.Todo, 0o766)
 		Log('Pasado (' + quehacemos + ') ' + self.Todo + ' a ' + Donde + self.Serie)
 
+class Pelicula:
+	""" Clase para trabajar con las películas
+	"""
+	import sqlite3
+	
+	def __init__(self, Todo, Tipo = 'Pelis'):
+		""" Inicializamos la clase
+		"""
+		self.Todo = Todo
+		# Obtenemos el año de la peli del título
+		try:
+			self.Año = int(Todo[Todo.find(')')-4:Todo.find(')')])
+		except:
+			self.Año = 0
+		# Obtenemos el título
+		self.Titulo = Todo[0:Todo.find('(')-1]
+		# Obtenemos la extensión
+		self.Extension = Todo[-3:]
+		# Pasamos el tipo (Borradas, Cortos, Documentales, Infantiles, Pelis, SD, Vistas)
+		self.Tipo = Tipo
+		# Obtenemos el género
+		genero = self.SacaInfo('genre')
+		# Si ha habido algún error extrayendo la información
+		if type(genero) == int:
+			print('Error: %d en %s' % (genero, self.Todo))
+			self.Genero = ''
+		else:
+			son = ''
+			# Nos suele venir como una lista a veces con ' ' otras con '/' así que hacemos una limpieza y dejamos solo un espacio
+			for g in genero:
+				son = son.strip() + ' ' + g.strip().replace('/', ' ') + ' '
+			self.Genero = son.strip()
+
+	def __str__(self):
+		""" Para poder imprimir la información de un plumazo
+		"""
+		return 'Título: {0:s}, Año: {1:d}, Tipo: {2:s}, Género: {3:s}'.format(self.Titulo, self.Año, self.Tipo, self.Genero)
+
+	def SacaInfo(self, P1 = 'year'):
+		""" Sacamos información del .nfo o del .tgmd (ThumbGen MetaData)
+		"""
+		import xml.etree.ElementTree as ET
+		from xml.dom.minidom import parseString
+		import xml
+		import zipfile
+
+		# Comprobamos si existe el fichero .NFO
+		if os.path.exists(env.MM + 'Msheets/' + self.Todo[:-4] + '.nfo'):
+			ruta = env.MM + 'Msheets/' + self.Todo[:-4] + '.nfo'
+		# Comprobamos que existe el fichero tgmd
+		else:
+			if os.path.exists(env.MM + 'Msheets/' + self.Todo + '.tgmd'):
+				try:
+					with zipfile.ZipFile(env.MM + 'Msheets/' + self.Todo + '.tgmd') as zip:
+						zip.extract('NFO', path=env.TMP)
+					if os.path.getsize(env.TMP + 'NFO') < 40:
+						Log('Ha habido un problema con el fichero de metadatos: ' + self.Todo)
+						os.remove(env.TMP + 'NFO')
+						return 1
+				except zipfile.BadZipFile as e:
+					Log('Ha habido un problema descomprimiendo el supuesto zip: ' + self.Todo, True)
+					return 2
+				ruta = env.TMP + 'NFO'
+			else:
+				Log('No encontramos el fichero NFO para ' + self.Todo)
+				return 3
+		with open(ruta, encoding="utf-8") as file:
+			info = file.read()
+		dom = parseString(info)
+		try:
+			xmlParametro = dom.getElementsByTagName(P1)[0].toxml()
+		except ValueError as e:
+			Log('No se ha encontrado el ' + p1 + e)
+			return
+		except IndexError as e:
+			Log('Ha habido un problem con el ' + P1 + ', ' + str(e))
+			return ''
+		xmlParametro = xmlParametro.replace('<' + P1 + '>', '').replace('</' + P1 + '>', '')
+				#with open(env.TMP + p1 + '.tr', 'w') as file:
+				#	info = file.write(xmlTrailer)
+		if ruta == env.TMP + 'NFO':
+			os.remove(env.TMP + 'NFO')
+		# Algunos casos particulares como el género que vienen varios campos
+		if P1 == 'genre':
+			xmlParametro = xmlParametro.replace('<name>','').replace('</name>','').strip().split()
+		return xmlParametro
+
+
 class SonoffTH:
 	""" Para manipular los SonOff con sensor de temperatura
 	"""
@@ -1177,6 +1265,74 @@ def GeneraLista(Listado, Pelis, Serie = False, Debug = False):
 			file.write(f + ':' + Listado + ':' + comen + capis + '\n')
 	return
 
+def GeneraListaBD(Listado, Pelis, Serie = False, Debug = False):
+	""" Pequeña función para generar la lista de películas o series con sus comentarios si los hubiera.
+	La separamos de la función principal para poder llamarla cuando realizamos la lista de últimas.
+	Hasta que desarrollemos mejor el sistema, hacemos una limpia de la tabla antes de procesar todas las pelis.
+	Queda pendiente el mantener la tabla directamente a la hora de guardar las pelis o borrarlas, y también moverlas
+	de Pelis a Vistas, por ejemplo.
+	
+	Listado contiene el nombre del fichero donde se va a almacenar la lista
+	Pelis es una lista con los elementos a tratar
+	Serie es un booleano que nos indica si se trata de una serie (True) o no (False)
+	
+	La BD le hemos creado con el siguiente schema:
+	CREATE TABLE pelis (ID INTEGER PRIMARY KEY AUTOINCREMENT, titulo text Unique, disco text, comentarios text, año int, genero text, tipo text);
+	CREATE TABLE series (ID INTEGER PRIMARY KEY AUTOINCREMENT, titulo text unique, disco text, comentarios text, año int, genero text, tipo int, capitulos text);
+	"""
+	import sqlite3
+	
+	# Si estamos listando las vistas activamos el flag
+	if not Serie:
+		tipo = Listado[Listado.find('_')+1:]
+	else:
+		tipo = ''
+	# Abrimos la BD y el cursor
+	bd = sqlite3.connect(env.BD)
+	bdcursor = bd.cursor()
+	# Por ahora, primero limpiamos de la tabla todos los registros de este disco y tipo
+	bdcursor.execute('Delete from pelis where disco = "' + Listado + '"')
+	if not Debug:
+		bd.commit()
+	# Procesamos la lista añadiendo los comentarios si los hubiera
+	for f in Pelis:
+		comen = ''
+		# Si se trata de series, cambiamos algunas cosas
+		if Serie:
+			que = f + env.DIR + f + '.'
+			if env.SISTEMA == 'Windows':
+				# Tenemos que cambiar el parámetro Listado[-2:] puesto que en windows no funciona
+				pass
+			capis = ListaCapitulos(f, Listado[-2:] + env.DIR + 'Series' + env.DIR, Debug)
+		else:
+			que = f[:-3]
+			capis = ''
+		if os.path.exists(que + 'txt'):
+			with open(que + 'txt') as fiche:
+				try:
+					comen = fiche.readline()
+				except UnicodeDecodeError as e:
+					Log('Error al procesar el comentario de ' + f, True)
+					continue
+			comen = comen[:-1]
+		# Extraemos el año, si está, del título
+		try:
+			año = int(f[f.find(')')-4:f.find(')')])
+		except:
+			año = 0
+		# Decidimos la tabla donde meter la información
+		#if Debug:
+		print('insert into pelis (titulo, disco, comentarios, año) values ("' + f + '", "' + Listado + '", "' + comen + '", ' + str(año) + ', "' + tipo + '")')
+		if Serie:
+			bdcursor.execute('insert into pelis (titulo, disco, comentarios, capis) values (' + f + ', ' + Listado + ', ' + comen + ', ' + capis + ')')
+		else:
+			bdcursor.execute('insert into pelis (titulo, disco, comentarios, año, tipo) values ("' + f + '", "' + Listado + '", "' + comen + '", ' + str(año) + ', "' + tipo + '")')
+	# Hacemos el commit para que se guarden los cambios y cerramos
+	if not Debug:
+		bd.commit()
+	bd.close()
+	return
+
 def GuardaHD(Disco = 'HD-TB-8-1'):
 	""" Se encarga de pasar las películas a los discos externos USB para su almacenamiento
 		Empezaremos solo por las pelis por ser más sencillo su tratamiento. Tenemos que tener 
@@ -1210,7 +1366,7 @@ def GuardaHD(Disco = 'HD-TB-8-1'):
 	LimpiaHD()
 	Etiq = GuardaLibre(env.HDG)
 	# Paramos el disco duro por si lo hemos dejado copiando. El parámetro -Sx establece en x*5 segundos el tiempo de inactividad antes de pararse
-	os.system('sync &&cd &&sudo umount /mnt/HD &&sudo hdparm -y /dev/disk/by-label/HD-TB-8-1')
+	os.system('sync &&cd &&sudo umount /mnt/HD &&sudo hdparm -y /dev/disk/by-label/' + Disco)
 	return
 
 def GuardaLibre(Ruta):
@@ -1727,7 +1883,7 @@ def ListaPelis(Ulti = 0, Ruta = env.HDG):
 			if os.path.exists(Ruta + car + '/'):
 				os.chdir(Ruta + car + '/')
 				pelis = ObtenLista()
-				GeneraLista(Etiq + '_' + car, pelis)
+				GeneraListaBD(Etiq + '_' + car, pelis)
 		# Guardamos el espacio libre en la unidad
 		GuardaLibre(Ruta)
 	return
@@ -1954,6 +2110,51 @@ def Placa(Quehacemos = 4, Tiempo = 0):
 		# En caso de control sencillo, como ya está programado en la clase lo pasamos directamente
 		placa.Controla(Quehacemos, Tiempo = Tiempo)
 	return placa.Temperatura
+
+def PonAño(Debug = False):
+	""" Para actualizar el año de las pelis en la BD
+	"""
+	import sqlite3
+	# Abrimos BD
+	bd = sqlite3.connect(env.BD)
+	bdc = bd.cursor()
+	lista = bdc.execute('SELECT titulo FROM pelis WHERE año=0').fetchall()
+	cuenta = 0
+	for f in lista:
+		peli = Pelicula(f[0])
+		año = peli.SacaInfo('year')
+		if type(año) == int:
+			print('Error: %d en %s' % (año, f[0]))
+			continue
+		if Debug:
+			print(f[0], año)
+		if año.isnumeric():
+			bdc.execute('UPDATE pelis SET año=' + año + ' WHERE titulo="' + f[0] + '"')
+			cuenta += 1
+	# Guardamos los cambios y cerramos
+	bd.commit()
+	bd.close()
+	print(cuenta)
+
+def PonGenero(Debug = False):
+	""" Para actualizar el año de las pelis en la BD
+	"""
+	import sqlite3
+	# Abrimos BD
+	bd = sqlite3.connect(env.BD)
+	bdc = bd.cursor()
+	lista = bdc.execute('SELECT titulo FROM pelis WHERE genero is null').fetchall()
+	cuenta = 0
+	for f in lista:
+		peli = Pelicula(f[0])
+		bdc.execute('UPDATE pelis SET genero="' + peli.Genero + '" WHERE titulo="' + f[0] + '"')
+		cuenta += 1
+	# Guardamos los cambios y cerramos
+	if not Debug:
+		print('Hecho')
+		bd.commit()
+	bd.close()
+	print(cuenta)
 
 def Prueba(Param, Debug = False):
 	""" Para probar funciones que estamos desarrollando

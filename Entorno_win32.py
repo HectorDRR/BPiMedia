@@ -1,5 +1,7 @@
 """Definiciones de rutas y variables para hacer el programa portable entre distintas plataformas/configuraciones
 """
+#BD de películas y series
+BD = 'w:\\.mini\\cine.bd'
 #Pelis en HD
 HD = 'p:\\pelis\\'
 #Donde guardar las pelis
