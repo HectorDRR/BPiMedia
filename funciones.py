@@ -203,7 +203,6 @@ class Capitulo:
 class Pelicula:
 	""" Clase para trabajar con las películas
 	"""
-	import sqlite3
 	
 	def __init__(self, Todo, Tipo = 'Pelis'):
 		""" Inicializamos la clase
@@ -213,6 +212,10 @@ class Pelicula:
 		try:
 			self.Año = int(Todo[Todo.find(')')-4:Todo.find(')')])
 		except:
+			# Si no está en el título, lo sacamos del .nfo o el .tgmd
+			self.Año = self.SacaInfo('year')
+		# Si SacaInfo ha dado un error
+		if self.Año < 10:
 			self.Año = 0
 		# Obtenemos el título
 		self.Titulo = Todo[0:Todo.find('(')-1]
@@ -1307,6 +1310,8 @@ def GeneraListaBD(Listado, Pelis, Serie = False, Debug = False):
 		else:
 			que = f[:-3]
 			capis = ''
+			# Creamos el objeto
+			peli = Pelicula(f)
 		if os.path.exists(que + 'txt'):
 			with open(que + 'txt') as fiche:
 				try:
@@ -1321,12 +1326,12 @@ def GeneraListaBD(Listado, Pelis, Serie = False, Debug = False):
 		except:
 			año = 0
 		# Decidimos la tabla donde meter la información
-		#if Debug:
-		print('insert into pelis (titulo, disco, comentarios, año) values ("' + f + '", "' + Listado + '", "' + comen + '", ' + str(año) + ', "' + tipo + '")')
+		if Debug:
+			print('insert into pelis (titulo, disco, comentarios, año, tipo, genero) values ("' + peli.Todo + '", "' + Listado + '", "' + comen + '", ' + str(peli.Año) + ', "' + peli.Tipo + '", "' + peli.Genero + '")')
 		if Serie:
-			bdcursor.execute('insert into pelis (titulo, disco, comentarios, capis) values (' + f + ', ' + Listado + ', ' + comen + ', ' + capis + ')')
+			bdcursor.execute('insert into Series (titulo, disco, comentarios, capis) values (' + f + ', ' + Listado + ', ' + comen + ', ' + capis + ')')
 		else:
-			bdcursor.execute('insert into pelis (titulo, disco, comentarios, año, tipo) values ("' + f + '", "' + Listado + '", "' + comen + '", ' + str(año) + ', "' + tipo + '")')
+			bdcursor.execute('insert into pelis (titulo, disco, comentarios, año, tipo, genero) values ("' + peli.Todo + '", "' + Listado + '", "' + comen + '", ' + str(peli.Año) + ', "' + peli.Tipo + '", "' + peli.Genero + '")')
 	# Hacemos el commit para que se guarden los cambios y cerramos
 	if not Debug:
 		bd.commit()
@@ -1884,6 +1889,7 @@ def ListaPelis(Ulti = 0, Ruta = env.HDG):
 				os.chdir(Ruta + car + '/')
 				pelis = ObtenLista()
 				GeneraListaBD(Etiq + '_' + car, pelis)
+				GeneraLista(Etiq + '_' + car, pelis)
 		# Guardamos el espacio libre en la unidad
 		GuardaLibre(Ruta)
 	return
@@ -2110,51 +2116,6 @@ def Placa(Quehacemos = 4, Tiempo = 0):
 		# En caso de control sencillo, como ya está programado en la clase lo pasamos directamente
 		placa.Controla(Quehacemos, Tiempo = Tiempo)
 	return placa.Temperatura
-
-def PonAño(Debug = False):
-	""" Para actualizar el año de las pelis en la BD
-	"""
-	import sqlite3
-	# Abrimos BD
-	bd = sqlite3.connect(env.BD)
-	bdc = bd.cursor()
-	lista = bdc.execute('SELECT titulo FROM pelis WHERE año=0').fetchall()
-	cuenta = 0
-	for f in lista:
-		peli = Pelicula(f[0])
-		año = peli.SacaInfo('year')
-		if type(año) == int:
-			print('Error: %d en %s' % (año, f[0]))
-			continue
-		if Debug:
-			print(f[0], año)
-		if año.isnumeric():
-			bdc.execute('UPDATE pelis SET año=' + año + ' WHERE titulo="' + f[0] + '"')
-			cuenta += 1
-	# Guardamos los cambios y cerramos
-	bd.commit()
-	bd.close()
-	print(cuenta)
-
-def PonGenero(Debug = False):
-	""" Para actualizar el año de las pelis en la BD
-	"""
-	import sqlite3
-	# Abrimos BD
-	bd = sqlite3.connect(env.BD)
-	bdc = bd.cursor()
-	lista = bdc.execute('SELECT titulo FROM pelis WHERE genero is null').fetchall()
-	cuenta = 0
-	for f in lista:
-		peli = Pelicula(f[0])
-		bdc.execute('UPDATE pelis SET genero="' + peli.Genero + '" WHERE titulo="' + f[0] + '"')
-		cuenta += 1
-	# Guardamos los cambios y cerramos
-	if not Debug:
-		print('Hecho')
-		bd.commit()
-	bd.close()
-	print(cuenta)
 
 def Prueba(Param, Debug = False):
 	""" Para probar funciones que estamos desarrollando
