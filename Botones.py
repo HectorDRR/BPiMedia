@@ -49,7 +49,7 @@ def Leo_Boton(client, userdata, message):
 		Log('No se va a bañar nadie más, ' + str(os.system('/home/hector/bin/bañados.sh')))
 		client.publish('stat/boton2/NOMAS','1')
 	else:
-		Log('Volvemos a activar la programación de la placa, ', os.remove('/tmp/TodosBañados')
+		Log('Volvemos a activar la programación de la placa, ', os.remove('/tmp/TodosBañados'))
 		client.publish('stat/boton2/NOMAS','0')
 	return
 
