@@ -204,16 +204,16 @@ class Pelicula:
 	""" Clase para trabajar con las películas
 	"""
 	
-	def __init__(self, Todo, Tipo = 'Pelis'):
+	def __init__(self, Todo, Tipo = 'Pelis', Disco = 'Ultimas'):
 		""" Inicializamos la clase
 		"""
 		self.Todo = Todo
 		# Obtenemos el año de la peli del título
-		try:
+		if Todo.find('(') > 0:
 			self.Año = int(Todo[Todo.find(')')-4:Todo.find(')')])
-		except:
+		else:
 			# Si no está en el título, lo sacamos del .nfo o el .tgmd
-			self.Año = self.SacaInfo('year')
+			self.Año = int(self.SacaInfo('year'))
 		# Si SacaInfo ha dado un error
 		if self.Año < 10:
 			self.Año = 0
@@ -223,6 +223,8 @@ class Pelicula:
 		self.Extension = Todo[-3:]
 		# Pasamos el tipo (Borradas, Cortos, Documentales, Infantiles, Pelis, SD, Vistas)
 		self.Tipo = Tipo
+		# Pasamos la Ubicación, por ahora manualmente
+		self.Disco = Disco
 		# Obtenemos el género
 		genero = self.SacaInfo('genre')
 		# Si ha habido algún error extrayendo la información
@@ -259,15 +261,15 @@ class Pelicula:
 					with zipfile.ZipFile(env.MM + 'Msheets/' + self.Todo + '.tgmd') as zip:
 						zip.extract('NFO', path=env.TMP)
 					if os.path.getsize(env.TMP + 'NFO') < 40:
-						Log('Ha habido un problema con el fichero de metadatos: ' + self.Todo)
+						Log('1: Ha habido un problema con el fichero de metadatos: ' + self.Todo)
 						os.remove(env.TMP + 'NFO')
 						return 1
 				except zipfile.BadZipFile as e:
-					Log('Ha habido un problema descomprimiendo el supuesto zip: ' + self.Todo, True)
+					Log('2: Ha habido un problema descomprimiendo el supuesto zip: ' + self.Todo, True)
 					return 2
 				ruta = env.TMP + 'NFO'
 			else:
-				Log('No encontramos el fichero NFO para ' + self.Todo)
+				Log('3: No encontramos el fichero NFO para ' + self.Todo)
 				return 3
 		with open(ruta, encoding="utf-8") as file:
 			info = file.read()
@@ -275,14 +277,12 @@ class Pelicula:
 		try:
 			xmlParametro = dom.getElementsByTagName(P1)[0].toxml()
 		except ValueError as e:
-			Log('No se ha encontrado el ' + p1 + e)
-			return
+			Log('4: No se ha encontrado el ' + p1 + ' de "' + self.Todo + '", ' + e)
+			return 4
 		except IndexError as e:
-			Log('Ha habido un problem con el ' + P1 + ', ' + str(e))
-			return ''
+			Log('5: Ha habido un problem con el ' + P1 + ' de "' + self.Todo + '", ' + str(e))
+			return 5
 		xmlParametro = xmlParametro.replace('<' + P1 + '>', '').replace('</' + P1 + '>', '')
-				#with open(env.TMP + p1 + '.tr', 'w') as file:
-				#	info = file.write(xmlTrailer)
 		if ruta == env.TMP + 'NFO':
 			os.remove(env.TMP + 'NFO')
 		# Algunos casos particulares como el género que vienen varios campos
@@ -290,7 +290,24 @@ class Pelicula:
 			xmlParametro = xmlParametro.replace('<name>','').replace('</name>','').strip().split()
 		return xmlParametro
 
-
+	def LineaWeb(self, Normal = True):
+		""" Función para generar la línea en HTML para el listado de películas, tanto el de últimas, que incluye la imagen como
+		el normal que la imagen solo aparece al hacer un mouseover
+		"""
+		# Obtenemos el trailer
+		trailer = self.SacaInfo('trailer')
+		# Emepezamos a formar la línea
+		linea = '<td valign="bottom" width="25%"><p align="center"><a href="Msheets/' + self.Todo + '_sheet.jpg" target="_Sheet" title="' + self.Disco +'"'
+		if Normal:
+			linea = linea + '><img src="caratulas/' + self.Todo[:-3] + 'jpg" \>'
+		else:
+			linea = linea + ' class="hover-lib" id="caratulas/' + self.Todo[:-3] + 'jpg">'
+		linea = linea + '<br /><font size="-1">' + self.Todo + '</font></a>\n'
+		if type(trailer) == str:
+			linea = linea + ' <a href="' + trailer + '" target="_trailer">[T]</a>'
+		linea = linea + '</td>\n'
+		return linea
+		
 class SonoffTH:
 	""" Para manipular los SonOff con sensor de temperatura
 	"""
@@ -1147,6 +1164,84 @@ def CreaWeb(p1 = 'Ultimas', Pocas = 0, Debug = False):
 		os.system(env.DEL + env.TMP + p1)
 	return
 
+def CreaWebO(Titulo = 'Ultimas', Filtro = 'SELECT * FROM pelis WHERE tipo="Infantiles" and genero like "%comedia%"', Modo = True, Debug = True):
+	""" Función para crear página web de películas/series obtenidas de la BD
+		Modo en True crea las páginas con acrátulas, estilo la de Últimas, el Modo False solo muestra las carátulas en mouseover
+		Filtro define el recordset de películas que vamos a extraer de la BD
+	"""
+	# Obtenemos la lista de películas
+	lista = LeeBD(Filtro)
+	# ¿Series o Pelis?
+	que = 'Pel&iacute;culas'
+	# Cargamos la plantilla de la página web
+	with open(env.PLANTILLAS + 'Peliculas.1') as file:
+			web = file.readlines()
+	# Ponemos el título de la página
+	web.insert(3, '\t<title>' + Titulo + '</title>\n')
+	web.insert(15, '<h1>' + Titulo + '</h1>\n')
+	# Para no repetir el índice al principio de la página pero si dejar un enlace
+	lind = lista[0][1][0]
+	# Definimos marca aquí para que la primera película también tenga un marcador
+	marca = '<a name="' + lind + '"></a>'
+	indice = '<p align="center"><a href="#' + lind + '">' + lind + '</a> '
+	# Añadimos el número de elementos procesados
+	web[18] = web[18][:-1] + que + ': ' + str(len(lista)) + '</p>\n'
+	# Decidimos si crear o no índices en cada cambio de letra
+	if not Titulo == 'Ultimas':
+		indexamos = True
+	else:
+		indexamos = False
+	# Inicializamos la variable para el cambio de fila de la tabla
+	cuenta = 1
+	for f in lista:
+		# Tratamos los índices, tanto el general como el insertado en el cambio de letra
+		if not f[1][0] == lind:
+			lind = f[1][0]
+			marca = '<a name="' + lind + '"></a>'
+			indice = indice + '<a href="#' + lind + '">' + lind + '</a> '
+			# En el listado de últimas no incluímos índices en medio de la tabla
+			if indexamos:
+				# Ponemos la marca para al final, incluir el índice
+				web.append('indice')
+				# Saltamos a la siguiente línea
+				cuenta = 1
+		# Creamos el objeto pasando los campos título, tipo y disco
+		if Debug:
+			print(f[1])
+		p = Pelicula(f[1], f[6], f[2])
+		# Añadimos la línea de la película con la marca de índice si existe después del 'align="center">'
+		web.append(p.LineaWeb(Modo).replace('center">', 'center">' + marca))
+		cuenta += 1
+		if cuenta == 5:
+			cuenta = 1
+			web.append('</tr><tr>\n')
+		marca = ''
+	if indexamos:	
+		# Rellenamos todos los índices en cada cambio de letra para facilitar la movilidad por la página
+		while True:
+			try:
+				# Si ya estaba cerrada y abierta la fila anterior lo omitimos
+				if web[web.index('indice')-1] == '</tr><tr>\n':
+					tr = ''
+				else:
+					tr = '</tr>\n<tr>'
+				web[web.index('indice')] = tr + '<td colspan="4" style="border:1px solid black">' + indice + '</p></td>\n</tr><tr>\n'
+			except ValueError:
+				break
+	# Añadimos la fecha de actualización
+	web[16] = web[16][:-1] + time.strftime('%a, %d %b %Y %H:%M') + '</p>\n'
+	# Añadimos el índice principal
+	web.insert(19, indice)
+	# Añadimos el final de la página teniendo en cuenta si el </tr> ya se puso o no
+	tr = ''
+	if cuenta > 1:
+		tr = '</tr>\n'
+	web.append(tr + '</table>\n<p align="center"><a href="index.html">Atrás</a></p>\n</body>\n<script type="text/javascript" src="jquery.js"></script>\n<script type="text/javascript" src="hover-lib.js"></script>\n</html>')
+	# Volcamos la página a su fichero
+	with open(env.WEB + Titulo + '.html', 'w', encoding='utf-8-sig') as file:
+		for f in web:
+			file.writelines(f)
+
 def Discolleno():
 	"""Es lanzada cuando el emule detecta que queda 1 GB o menos libre.
 	Se encargará de hacer una primera limpieza, y en caso de que no sea suficiente, mandar un mensaje avisando del problema
@@ -1593,6 +1688,17 @@ def Led():
 	GPIO.cleanup(17)
 	return exit
 
+def LeeBD(SQL):
+	""" Función para obtener un recordset de la BD del cine y no tener que estar abriéndola en cada función que vayamos a usarla
+	"""
+	import sqlite3
+	
+	db=sqlite3.connect(env.BD)
+	dbc=db.cursor()
+	lista=dbc.execute(SQL).fetchall()
+	db.close()
+	return lista
+
 def Libre(p1, Tam = 'G'):
 	""" Obtenemos el espacio libre en disco, por defecto, en GB
 	"""
@@ -1987,7 +2093,7 @@ def ObtenLista(Ulti = 0, Debug = 0):
 	else:
 		pelis.sort()
 	return pelis
-
+	
 def Para():
 	""" Se encarga de imprimir los parámetros pasados a funciones.py para depurar algún posible error
 	"""
