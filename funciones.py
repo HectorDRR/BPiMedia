@@ -210,7 +210,12 @@ class Pelicula:
 		self.Todo = Todo
 		# Obtenemos el año de la peli del título
 		if Todo.find('(') > 0:
-			self.Año = int(Todo[Todo.find(')')-4:Todo.find(')')])
+			try:
+				self.Año = int(Todo[Todo.find(')')-4:Todo.find(')')])
+			except:
+				Log('El nombre de la peli tiene problemas con los paréntesis: ' + Todo, True)
+				# Lo intentamos por aquí para seguir con el proceso
+				self.Año = int(self.SacaInfo('year'))
 		else:
 			# Si no está en el título, lo sacamos del .nfo o el .tgmd
 			self.Año = int(self.SacaInfo('year'))
@@ -269,7 +274,7 @@ class Pelicula:
 					return 2
 				ruta = env.TMP + 'NFO'
 			else:
-				Log('3: No encontramos el fichero NFO para ' + self.Todo)
+				Log('3: No encontramos el fichero NFO para ' + self.Todo, Fichero = env.PLANTILLAS + 'NoNfo.log')
 				return 3
 		with open(ruta, encoding="utf-8") as file:
 			info = file.read()
@@ -1399,6 +1404,8 @@ def GeneraListaBD(Listado, Pelis, Serie = False, Ultimas = False, Debug = False)
 	# Procesamos la lista añadiendo los comentarios si los hubiera
 	for f in Pelis:
 		comen = ''
+		if Debug:
+			print(f)
 		# Si se trata de series, cambiamos algunas cosas
 		if Serie:
 			que = f + env.DIR + f + '.'
@@ -1420,8 +1427,8 @@ def GeneraListaBD(Listado, Pelis, Serie = False, Ultimas = False, Debug = False)
 					continue
 			comen = comen[:-1]
 		# Decidimos la tabla donde meter la información
-		if Debug:
-			print('insert into ' + tabla + ' (titulo, disco, comentarios, año, tipo, genero) values ("' + peli.Todo + '", "' + Listado + '", "' + comen + '", ' + str(peli.Año) + ', "' + peli.Tipo + '", "' + peli.Genero + '")')
+		#if Debug:
+		#	print('insert into ' + tabla + ' (titulo, disco, comentarios, año, tipo, genero) values ("' + peli.Todo + '", "' + Listado + '", "' + comen + '", ' + str(peli.Año) + ', "' + peli.Tipo + '", "' + peli.Genero + '")')
 		if Serie:
 			bdcursor.execute('insert into ' + tabla + ' (titulo, disco, comentarios, capis) values (' + f + ', ' + Listado + ', ' + comen + ', ' + capis + ')')
 		else:
@@ -1993,7 +2000,7 @@ def ListaPelis(Ulti = 0, Ruta = env.HDG):
 			if os.path.exists(Ruta + car + '/'):
 				os.chdir(Ruta + car + '/')
 				pelis = ObtenLista()
-				GeneraListaBD(Etiq + '_' + car, pelis)
+				GeneraListaBD(Etiq + '_' + car, pelis, Debug = True)
 				GeneraLista(Etiq + '_' + car, pelis)
 		# Guardamos el espacio libre en la unidad
 		GuardaLibre(Ruta)
@@ -2030,14 +2037,15 @@ def ListaSeries(Ruta='', Debug = False):
 	os.system('grep Faltan ' + env.PLANTILLAS + etiq)
 	return
 	
-def Log(p1, imp = False, fallo = ''):
+def Log(p1, imp = False, fallo = '', Fichero = env.LOG):
 	"""Función para escribir en el log del sistema de mulita
 	p1 es el mensaje a escribir
 	imp si es verdadero lo imprimimos en panatala además de ponerlo en el log
 	fallo mostraría la rutina que dio origen al mensaje. Faltaría automatizarlo.
+	Damos la opción Fichero para poder escribir a un log diferente, por ejemplo para que las pelis con fallos no saturen el log
 	"""
 	escri = time.strftime('%d/%m/%Y %H:%M:%S') + ' ' + fallo + p1 + '\n'
-	with open(env.LOG, 'a', encoding='utf-8') as fichero:
+	with open(Fichero, 'a', encoding='utf-8') as fichero:
 		fichero.write(escri)
 	if imp:
 		print(escri)
@@ -2577,7 +2585,7 @@ def Trailer(p1):
 		os.remove(env.TMP + 'NFO')
 		return ''
 	except IndexError as e:
-		Log('Ha habido un problem con el trailer: ' + p1 + ', ' + str(e))
+		Log('Ha habido un problem con el trailer: ' + p1 + ', ' + str(e), Fichero = env.Plantillas + 'NoTrailer.log')
 		os.remove(env.TMP + 'NFO')
 		return ''
 	xmlTrailer = xmlTrailer.replace('<trailer>', '').replace('</trailer>', '')
