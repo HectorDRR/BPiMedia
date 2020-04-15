@@ -288,6 +288,9 @@ class Pelicula:
 		# Algunos casos particulares como el género que vienen varios campos
 		if P1 == 'genre':
 			xmlParametro = xmlParametro.replace('<name>','').replace('</name>','').strip().split()
+		# El trailer que en ocasiones viene con un formato 'plugin'
+		if P1 == 'trailer':
+			xmlParametro = 'https://www.youtube.com/watch?v=' + xmlParametro.split('=')[2]
 		return xmlParametro
 
 	def LineaWeb(self, Normal = True):
@@ -1164,9 +1167,9 @@ def CreaWeb(p1 = 'Ultimas', Pocas = 0, Debug = False):
 		os.system(env.DEL + env.TMP + p1)
 	return
 
-def CreaWebO(Titulo = 'Ultimas', Filtro = 'SELECT * FROM pelis WHERE tipo="Infantiles" and genero like "%comedia%"', Modo = True, Debug = True):
+def CreaWebO(Titulo = 'Ultimas', Filtro = 'SELECT * FROM ultimas', Modo = True, Debug = True):
 	""" Función para crear página web de películas/series obtenidas de la BD
-		Modo en True crea las páginas con acrátulas, estilo la de Últimas, el Modo False solo muestra las carátulas en mouseover
+		Modo en True crea las páginas con carátulas, estilo la de Últimas, el Modo False solo muestra las carátulas en mouseover
 		Filtro define el recordset de películas que vamos a extraer de la BD
 	"""
 	# Obtenemos la lista de películas
@@ -1186,11 +1189,6 @@ def CreaWebO(Titulo = 'Ultimas', Filtro = 'SELECT * FROM pelis WHERE tipo="Infan
 	indice = '<p align="center"><a href="#' + lind + '">' + lind + '</a> '
 	# Añadimos el número de elementos procesados
 	web[18] = web[18][:-1] + que + ': ' + str(len(lista)) + '</p>\n'
-	# Decidimos si crear o no índices en cada cambio de letra
-	if not Titulo == 'Ultimas':
-		indexamos = True
-	else:
-		indexamos = False
 	# Inicializamos la variable para el cambio de fila de la tabla
 	cuenta = 1
 	for f in lista:
@@ -1199,8 +1197,8 @@ def CreaWebO(Titulo = 'Ultimas', Filtro = 'SELECT * FROM pelis WHERE tipo="Infan
 			lind = f[1][0]
 			marca = '<a name="' + lind + '"></a>'
 			indice = indice + '<a href="#' + lind + '">' + lind + '</a> '
-			# En el listado de últimas no incluímos índices en medio de la tabla
-			if indexamos:
+			# En el listado con carátulas no incluímos índices en medio de la tabla
+			if not Modo:
 				# Ponemos la marca para al final, incluir el índice
 				web.append('indice')
 				# Saltamos a la siguiente línea
@@ -1216,7 +1214,7 @@ def CreaWebO(Titulo = 'Ultimas', Filtro = 'SELECT * FROM pelis WHERE tipo="Infan
 			cuenta = 1
 			web.append('</tr><tr>\n')
 		marca = ''
-	if indexamos:	
+	if not Modo:	
 		# Rellenamos todos los índices en cada cambio de letra para facilitar la movilidad por la página
 		while True:
 			try:
@@ -1230,8 +1228,9 @@ def CreaWebO(Titulo = 'Ultimas', Filtro = 'SELECT * FROM pelis WHERE tipo="Infan
 				break
 	# Añadimos la fecha de actualización
 	web[16] = web[16][:-1] + time.strftime('%a, %d %b %Y %H:%M') + '</p>\n'
-	# Añadimos el índice principal
-	web.insert(19, indice)
+	# Añadimos el índice principal si no es la página Ultimas
+	if not Titulo == 'Ultimas':
+		web.insert(19, indice)
 	# Añadimos el final de la página teniendo en cuenta si el </tr> ya se puso o no
 	tr = ''
 	if cuenta > 1:
@@ -1363,7 +1362,7 @@ def GeneraLista(Listado, Pelis, Serie = False, Debug = False):
 			file.write(f + ':' + Listado + ':' + comen + capis + '\n')
 	return
 
-def GeneraListaBD(Listado, Pelis, Serie = False, Debug = False):
+def GeneraListaBD(Listado, Pelis, Serie = False, Ultimas = False, Debug = False):
 	""" Pequeña función para generar la lista de películas o series con sus comentarios si los hubiera.
 	La separamos de la función principal para poder llamarla cuando realizamos la lista de últimas.
 	Hasta que desarrollemos mejor el sistema, hacemos una limpia de la tabla antes de procesar todas las pelis.
@@ -1385,11 +1384,16 @@ def GeneraListaBD(Listado, Pelis, Serie = False, Debug = False):
 		tipo = Listado[Listado.find('_')+1:]
 	else:
 		tipo = ''
+	# Si estamos con las últimas cambiamos el nombre de la tabla
+	if Ultimas:
+		tabla = 'ultimas'
+	else:
+		tabla = 'pelis'
 	# Abrimos la BD y el cursor
 	bd = sqlite3.connect(env.BD)
 	bdcursor = bd.cursor()
 	# Por ahora, primero limpiamos de la tabla todos los registros de este disco y tipo
-	bdcursor.execute('Delete from pelis where disco = "' + Listado + '"')
+	bdcursor.execute('Delete from ' + tabla + ' where disco = "' + Listado + '"')
 	if not Debug:
 		bd.commit()
 	# Procesamos la lista añadiendo los comentarios si los hubiera
@@ -1415,18 +1419,13 @@ def GeneraListaBD(Listado, Pelis, Serie = False, Debug = False):
 					Log('Error al procesar el comentario de ' + f, True)
 					continue
 			comen = comen[:-1]
-		# Extraemos el año, si está, del título
-		try:
-			año = int(f[f.find(')')-4:f.find(')')])
-		except:
-			año = 0
 		# Decidimos la tabla donde meter la información
 		if Debug:
-			print('insert into pelis (titulo, disco, comentarios, año, tipo, genero) values ("' + peli.Todo + '", "' + Listado + '", "' + comen + '", ' + str(peli.Año) + ', "' + peli.Tipo + '", "' + peli.Genero + '")')
+			print('insert into ' + tabla + ' (titulo, disco, comentarios, año, tipo, genero) values ("' + peli.Todo + '", "' + Listado + '", "' + comen + '", ' + str(peli.Año) + ', "' + peli.Tipo + '", "' + peli.Genero + '")')
 		if Serie:
-			bdcursor.execute('insert into Series (titulo, disco, comentarios, capis) values (' + f + ', ' + Listado + ', ' + comen + ', ' + capis + ')')
+			bdcursor.execute('insert into ' + tabla + ' (titulo, disco, comentarios, capis) values (' + f + ', ' + Listado + ', ' + comen + ', ' + capis + ')')
 		else:
-			bdcursor.execute('insert into pelis (titulo, disco, comentarios, año, tipo, genero) values ("' + peli.Todo + '", "' + Listado + '", "' + comen + '", ' + str(peli.Año) + ', "' + peli.Tipo + '", "' + peli.Genero + '")')
+			bdcursor.execute('insert into ' + tabla + ' (titulo, disco, comentarios, año, tipo, genero) values ("' + peli.Todo + '", "' + Listado + '", "' + comen + '", ' + str(peli.Año) + ', "' + peli.Tipo + '", "' + peli.Genero + '")')
 	# Hacemos el commit para que se guarden los cambios y cerramos
 	if not Debug:
 		bd.commit()
@@ -1637,9 +1636,8 @@ def JTrailer(Peli, Debug = 0):
 	""" Se encarga de extraer la URL de los trailers de las páginas de últimas y Todas desde
 	el trabajo para generar allí las listas.
 	"""
-	import codecs
 	# Leemos el fichero con todas las películas
-	with codecs.open(env.TMP + 'Todas.html', 'r', encoding='utf-8-sig') as f:
+	with open(env.TMP + 'Todas.html', 'r', encoding='utf-8') as f:
 		lista = f.readlines()
 	# En pp almacenamos los trailers
 	pp = []
@@ -1651,9 +1649,10 @@ def JTrailer(Peli, Debug = 0):
 	for f in range(20,len(lista) - 5):
 		if lista[f].startswith('<td v'):
 			donde = lista[f].find('-1"')+4
-			qq.append(lista[f][donde:lista[f].find('.mkv<',donde) + 4])
-			if lista[f + 1][-8:-5] == '[T]':
-				pp.append(lista[f + 1][9:-27])
+			qq.append(lista[f][donde:lista[f].find('mkv<')+3])
+			# Mejoramos la búsqueda y extracción del trailer
+			if lista[f + 1].find('http') > 0:
+				pp.append(lista[f + 1][lista[f+1].find('htt'):lista[f+1].find('" t')])
 			else:
 				pp.append('')
 	# Imprimimos la lista para depurar
@@ -2729,6 +2728,15 @@ def Traspasa(Copio = 1, Monta = 1):
 	os.system('/home/hector/bin/ledonoff none')
 	return
 
+def Ultimas():
+	""" Para meter en la BD las pelis en Ultimas y generar la página web
+	"""
+	# Nos pasamos a la carpeta de las últimas y obtenemos la lista
+	os.chdir(env.HD)
+	lista = ObtenLista(1)
+	GeneraListaBD('Ultimas', lista, Ultimas = True)
+	CreaWebO()
+	
 if __name__ == "__main__":
 	""" En caso de que se ejecute desde la línea de comando, llamamos a la función dada como parámetro 1
 	"""
