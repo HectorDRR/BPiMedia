@@ -15,11 +15,7 @@ fi
 for f in /home/hector/bin /mnt/f /mnt/e/util /mnt/e/.mini; do 
 	rclone sync $f Drive:Odroid/${f##*/} --exclude "art_cache/**" --exclude "__pycache__/*" --exclude ".git/**" -v --log-file /tmp/salcopias.txt
 done
-#rclone sync /home/hector/bin Drive:Odroid/bin --exclude "__pycache__/*" --exclude ".git/**" -v --log-file /tmp/salcopias.txt
-#rclone sync /mnt/f Drive:Odroid/f -v --log-file /tmp/salcopias.txt
-#rclone sync /mnt/e/util Drive:Odroid/util -v --log-file /tmp/salcopias.txt
-#rclone sync /mnt/e/.mini Drive:Odroid/.mini --exclude "art_cache/**" -v --log-file /tmp/salcopias.txt
-echo `date +%d/%m/%Y\ %H:%M:%S` [copias.sh] Terminada la copia al Google drive. Tamaño ocupado de bin, f, util y .mini:>>/mnt/e/.mini/milog.txt
-for f in /home/hector/bin /mnt/f /mnt/e/util /mnt/e/.mini; do 
-	rclone size Drive:Odroid/${f##*/}>>/mnt/e/.mini/milog.txt
-done
+echo `date +%d/%m/%Y\ %H:%M:%S` [copias.sh] Terminada la copia al Google drive>>/mnt/e/.mini/milog.txt
+#for f in /home/hector/bin /mnt/f /mnt/e/util /mnt/e/.mini; do 
+#	rclone size Drive:Odroid/${f##*/}>>/mnt/e/.mini/milog.txt
+#done
