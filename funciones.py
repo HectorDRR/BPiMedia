@@ -368,28 +368,22 @@ class SonoffTH:
 					 1 Activamos manualmente con opción de tiempo para desonexión automática
 					 2 Estamos controlando la placa de manera automática
 					 4 Nueva función de control automático de manera más segura, usando backlog para asegurarse de que no se queda nada conectado
-		Partimos de una consigna de 40º mínimo y 43º máximo que hemnos visto es suficiente para bañarnos los 3
+		Partimos de una consigna mínima que fijamos en base a TMin y al mes en curso que hemos visto es suficiente para bañarnos los 3
 		TMax: Temperatura máxima a alcanzar cuando el control es automático
 		TMin: Temperatura mínima para proceder con el control automático
 		Tiempo: En segundos que queremos mantener la placa funcionando
 		
 		**Por seguridad, por si hubiera algún problema con la mulita o pérdida de conexió Wifi, procedemos a usar el comando
-		'backlog' que nos permite agrupar varios comandos en una sola orden, de manera que siempre que activemos el SonOff
-		también le mandaremos la orden de apagado con un delay en medio. De esta manera, aunque el programa o la conexión 
-		fallen nos aseguramos de que el sonfoff se desactivará tras el tiempo de 'delay' enviado, que es un máximo de 6 minutos.
+		'pulsetime' que nos permite prefijar el tiempo que va a estar encendido, de manera que siempre que activemos el SonOff
+		la orden de apagado llegará automáticamente cuando haya pasado el tiempo definido en el PulseTime.
 		
 		Tiempo: Por ahora, solo lo aplicamos al control manual de encendido. Si es >0 damos la orden de encender 
 		durante ese tiempo y después apagar.
 		
-		Pendiente elevar la temperatura mínima dependiendo de la época del año. Hemos visto que en verano con 35º es suficiente 
-		para ducharnos los 3, pero en invierno, como el agua que entra en el depósito está mucho más fría, la caída de temperatura 
-		es mucho mayor en menos tiempo, por lo que pasamos a subirlo a 40º. Tendremos que encontrar una referencia externa para poder 
-		variar esa consigna de manera automática.
 		"""
 		# En caso de pasarlo desde línea de comando como string, lo pasamos a int. Si ya viene como int no pasa nada
 		Modo = int(Modo)
 		TMax = int(TMax)
-		#TMin = int(TMin)
 		Teimpo = int(Tiempo)
 		if (Modo == 0 and self.LeeEstado() == 'ON'):
 			# Paramos el SonOff
@@ -410,30 +404,17 @@ class SonoffTH:
 			else:
 				# Activamos el SonOff por un tiempo determinado. El tiempo nos viene en segundos pero el SonOff lo recibe en ms
 				#self.client.publish('cmnd/' + self.Topico + '/BACKLOG', 'POWER ON;DELAY ' + str(Tiempo * 10) + ';POWER OFF')
-				self.MandaCurl('Backlog Power on;Delay ' + str(Tiempo) + '0;Power Off')
+				# Para adaptarlo al Pulsetime primero vemos si son más de 10 segundos
+				if Tiempo > 10:
+					tiempo2 = Tiempo + 100
+				else:
+					tiempo2 = Tiempo * 10
+				self.MandaCurl('Backlog PulseTime1 ' + str(tiempo2) + ';Power1 On')
 				if self.Debug:
-					print(self.Topico + 'Backlog Power on;Delay ' + str(Tiempo) + '0;Power Off\nEstado: ' + self.LeeEstado())
+					print(self.Topico + ' Backlog PulseTime1 ' + str(tiempo2) + ';Power1 On\nEstado: ' + self.LeeEstado())
 				Log('Activamos la ' + self.Topico + ' manualmente durante ' + str(Tiempo) + ' segundos', self.Debug)
 			return
-		if Modo == 2:
-			# Si la temperatura está por debajo de la requerida
-			if self.LeeTemperatura() < self.TMin:
-				# Si está desactivada, la activamos
-				if self.Estado == 'OF':
-					#self.client.publish('cmnd/' + self.Topico + '/POWER', 'ON')
-					self.MandaCurl('Power On')
-					Log('Activamos la ' + self.Topico, self.Debug)
-			# Subimos la consigna ,en el caso de la placa, debido a que el sensor está demasiado cerca de la resistencia y la temperatura 
-			# sube muy rápido y no refleja la real del agua
-			if self.Temperatura > TMax:
-				# Si está activada, la paramos
-				if self.Estado == 'ON':
-					#self.client.publish('cmnd/' + self.Topico + '/POWER', 'OFF')
-					self.MandaCurl('Power Off')
-					Log('Desactivamos la ' + self.Topico + '', self.Debug)
-			return
 		if Modo == 4:
-			# Para ir desarrollando el control totalmente automatizado embebido en el objeto
 			# Si la temperatura está por debajo de la requerida
 			while self.LeeTemperatura() < self.TMin:
 				# En caso de problema leyendo la temperatura
@@ -442,43 +423,22 @@ class SonoffTH:
 					return False
 				# Calculamos el tiempo necesario para llegar a la temperatura deseada. Primero obtenemos los grados de diferencia
 				temperatura = self.TMin - self.Temperatura
-				# En base al tipo de instalación, definimos el coeficiente de tiempo por cada grado. Suprimimos el de la bomba puesto que lo ponemos un tiempo fijo
-				#if self.Topico == 'bomba':
-					# En el caso de la bomba, 12 segundos por grado
-				#	grado = 12
-				if self.Topico == 'placa':
-					# En el caso de la placa, partiendo de 2 kW de resistencia y 200 l de depótiso obtenemos unos 7 minutos. 1º = 4.180 Julios x kg = 4.180 * 200 kg = 836.000 J / 2.000 W = 418 seg.
-					grado = 418
+				# En el caso de la placa, partiendo de 2 kW de resistencia y 200 l de depótiso obtenemos unos 7 minutos. 1º = 4.180 Julios x kg = 4.180 * 200 kg = 836.000 J / 2.000 W = 418 seg.
+				grado = 418
 				Tiempo = temperatura * grado
-				# Solo podemos poner un delay de máximo 6 minutos, y la placa necesita 7 minutos por grado
-				# Si está desactivada, la activamos
+				# Si está desactivada, la activamos. El tiempo en el PulseTime en segundos hay que sumarle 100 ya que los 100
+				# primero se miden en décimas de segundo. Se tiene que usar un número PulseTimex que también se usará en el Powerx
 				if self.Estado == 'OF':
 					Log('Activamos la ' + self.Topico + ' durante ' + str(Tiempo // 60) + ':' + '{:0>2d} '.format(Tiempo % 60) + 'partiendo de una temperatura de ' + str(self.Temperatura) + 'º para alcanzar los ' + str(self.TMin) + 'º', self.Debug)
-					if Tiempo > 360:
-						# En caso de tenerla que mantener más de 6 minutos encendida los hacemos en tramos de 6 minutos
-						for f in range(0, Tiempo // 360, 1):
-							#self.client.publish('cmnd/' + self.Topico + '/BACKLOG', 'POWER ON;DELAY 3600;POWER OFF')
-							self.MandaCurl('BACKLOG POWER ON;DELAY 3600;POWER OFF')
-							time.sleep(365)
-							# Para ir monitorizando, vamos pasando al log la temperatura
-							Log('Temperatura de la ' + self.Topico + ': ' + str(self.LeeTemperatura()) + 'º', self.Debug)
-							#if self.Temperatura >= TMax:
-							#	break
-						# Y por último, la mantenemos encendida el tiempo restante no múltiplo de 6 minutos
-						# Al delay el tiempo se le pasa en décimas de segundo, así que en vez de * 10 sencillamente le añadimos un 0
-						#self.client.publish('cmnd/' + self.Topico + '/BACKLOG', 'POWER ON;DELAY ' + str(Tiempo % 360) + '0;POWER OFF')
-						self.MandaCurl('BACKLOG POWER ON;DELAY ' + str(Tiempo % 360) + '0;POWER OFF')
-						time.sleep(Tiempo % 360 + 2)
-					else:
-						#self.client.publish('cmnd/' + self.Topico + '/BACKLOG', 'POWER ON;DELAY ' + str(Tiempo) + '0;POWER OFF')
-						self.MandaCurl('BACKLOG POWER ON;DELAY ' + str(Tiempo) + '0;POWER OFF')
-						time.sleep(Tiempo + 2)
-				# Esperamos un minuto para dar tiempo a que la temperatura en el sensor se estabilize
-				time.sleep(60)
-			Log('Terminamos el control de la ' + self.Topico + ' con una temperatura de ' + str(self.Temperatura) + 'º', self.Debug)
-			# Por si la hemos conectado manualmente
-			if self.Estado == 'ON':
-				self.MandaCurl('POWER OFF')
+					#self.client.publish('cmnd/' + self.Topico + '/BACKLOG', 'PulseTime1 ' + str(Tiempo + 100) + ';POWER1 ON'')
+					# Definimos el PulseTime y activamos la placa
+					self.MandaCurl('BACKLOG PulseTime1 ' + str(Tiempo + 100) + ';POWER1 ON')
+				else:
+					Log('La placa ya esta activa y quedan ' + self.MandaCurl('PulseTime1'))
+				# Esperamos 418 segundos para cada grado, casi 7 minutos, para ir informando del progreso
+				#time.sleep(418)
+				#Log('Temperatura de la ' + self.Topico + ': ' + str(self.LeeTemperatura()) + 'º', self.Debug)
+			Log('Terminamos el control de la ' + self.Topico + ' con una temperatura de ' + str(self.Temperatura) + 'º y quedan ' + self.MandaCurl('PulseTime1'), self.Debug)
 		return True
 
 	def LeeEstado(self):
@@ -2206,21 +2166,21 @@ def Placa(Quehacemos = 4, Tiempo = 0):
 		return MandaCurl('http://placa/cm?cmnd=Power%20Off')
 	if Quehacemos == 4:
 		# En caso de habernos bañado todos podemos crear un fichero en /tmp para que no se lance más. Comprobamos la existencia de dicho fichero
-		# y en caso de que exista salimos, pero antes comprobamos si es la última activación en la noche (21:45) en ese caso, antes de salir, lo borramos
+		# y en caso de que exista salimos, pero antes comprobamos si es la última activación en la noche (21:45) o la última
+		# de la mañana. En ese caso, antes de salir, lo borramos
 		if os.path.exists('/tmp/TodosBañados'):
 			if (int(time.strftime('%H%M')) > 2144 or (int(time.strftime('%H%M')) > 755 and int(time.strftime('%H%M')) < 801)):
 				os.remove('/tmp/TodosBañados')
 				Log('Borramos TodosBañados')
-			else:
-				Log('Ya se han bañado todos así que no activamos placa')
+			Log('Ya se han bañado todos así que no activamos placa')
 			return
 		# Comprobamos si está corriendo ya el control de la placa. En caso de que no lo esté solo devolverá 3 procesos: el bash que lanza el cron, el de Botones y el pgrep
 		# Si lo está devuelve 4 en caso de que se haya lanzado por el cron, lo más habitual
-		proceso = list(os.popen('pgrep -af Placa'))
-		print(proceso)
-		if len(proceso) > 3:
-			Log('Ya está corriendo el proceso de control de la Placa, por lo que salimos')
-			return
+		#proceso = list(os.popen('pgrep -af Placa'))
+		#print(proceso)
+		#if len(proceso) > 3:
+			#Log('Ya está corriendo el proceso de control de la Placa, por lo que salimos')
+			#return
 	# Creamos la instancia de la placa
 	placa = SonoffTH('placa', True)
 	if (placa.LeeTemperatura() >= placa.TMin and Quehacemos == 4):
