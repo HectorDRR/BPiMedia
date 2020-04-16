@@ -416,7 +416,7 @@ class SonoffTH:
 			return
 		if Modo == 4:
 			# Si la temperatura está por debajo de la requerida
-			while self.LeeTemperatura() < self.TMin:
+			if self.LeeTemperatura() < self.TMin:
 				# En caso de problema leyendo la temperatura
 				if self.Temperatura == 0:
 					Log('Hemos tenido problemas leyendo la Temperatura de la ' + self.Topico)
