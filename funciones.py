@@ -328,14 +328,15 @@ class SonoffTH:
 	# A partir de Octubre sencillamente le restamos los 9 meses anteriores y tenemos 1 grado por cada mes hasta Diciembre
 	if mes > 9:
 		mes = mes - 9
-	# A partir de Enero y hasta Mayo, aumentamos los 3º anteriores + 1
+	# A partir de Enero y hasta Marzo, aumentamos los 3º anteriores + 1
 	else:
-		if mes < 5 :
+		if mes < 4 :
 			mes = 3 + mes
 		else:
 			mes = 0
-	# Y por ahora, asumimos que Junio va a estar calentito y que vamos a mantener la consigna mínima de 35º de Junio a Septiembre
+	# Y por ahora, asumimos que Mayo va a estar calentito y que vamos a mantener la consigna mínima de 35º de Abril a Septiembre
 	TMin = env.TEMPERATURA + mes
+	
 	def __init__(self, Topico, Debug = False):
 		""" Inicializamos el objeto con el tópico que hemos asignado al SonOff
 		"""
@@ -368,7 +369,15 @@ class SonoffTH:
 					 1 Activamos manualmente con opción de tiempo para desonexión automática
 					 2 Estamos controlando la placa de manera automática
 					 4 Nueva función de control automático de manera más segura, usando backlog para asegurarse de que no se queda nada conectado
-		Partimos de una consigna mínima que fijamos en base a TMin y al mes en curso que hemos visto es suficiente para bañarnos los 3
+		Partimos de una consigna mínima que fijamos en base a TMin y al mes en curso que hemos visto es suficiente para bañarnos
+		los 3. Lo modificamos dependiendo de las veces que se ha activado la bomba a través de una variable en la propia placa,
+		Mem1, que se reincia a 0 todos los días a las 4 AM por una Rule en la propia placa:
+		rule1 on time#Minute=240 do var1 0 endon
+		stat/placa/RESULT = {"Rule1":"ON","Once":"OFF","StopOnError":"OFF","Free":477,"Rules":"on time#Minute=240 do var1 0 endon"}
+		El valor de Mem1 lo modificamos directamente desde el botón cuando lo apretamos con el comando add1 1 que le suma 1 a la 
+		variable 1. De esta manera no calentamos igual si ya se ha bañado una o 2 personas. Aplicamos un diferencial de 2º por 
+		cada uno
+		
 		TMax: Temperatura máxima a alcanzar cuando el control es automático
 		TMin: Temperatura mínima para proceder con el control automático
 		Tiempo: En segundos que queremos mantener la placa funcionando
@@ -415,6 +424,10 @@ class SonoffTH:
 				Log('Activamos la ' + self.Topico + ' manualmente durante ' + str(Tiempo) + ' segundos', self.Debug)
 			return
 		if Modo == 4:
+			# Reducimos 2º por cada vez que se haya apretado el botón que lo obtenemos de mem1
+			if Self.Mem1 > 0:
+				Log('Reducimos la temperatura objetivo en base a las veces que se ha apretado el botón: ' + str(self.TMin) + '-' + str(self.Var1 * 2), self.Debug)
+				self.TMin = self.Tmin - (Self.Var1 * 2)
 			# Si la temperatura está por debajo de la requerida
 			if self.LeeTemperatura() < self.TMin:
 				# En caso de problema leyendo la temperatura
@@ -435,9 +448,6 @@ class SonoffTH:
 					self.MandaCurl('BACKLOG PulseTime1 ' + str(Tiempo + 100) + ';POWER1 ON')
 				else:
 					Log('La placa ya esta activa y quedan ' + self.MandaCurl('PulseTime1'))
-				# Esperamos 418 segundos para cada grado, casi 7 minutos, para ir informando del progreso
-				#time.sleep(418)
-				#Log('Temperatura de la ' + self.Topico + ': ' + str(self.LeeTemperatura()) + 'º', self.Debug)
 			Log('Terminamos el control de la ' + self.Topico + ' con una temperatura de ' + str(self.Temperatura) + 'º y quedan ' + self.MandaCurl('PulseTime1'), self.Debug)
 		return True
 
@@ -452,6 +462,8 @@ class SonoffTH:
 			else:
 				cuantos += 1
 		self.Estado = eval(self.MandaCurl('Power'))['POWER'][0:2]
+		# Leemos también el contenido de Var1 para saber cuantas veces se ha activado la bomba hoy
+		self.Var1 = int(eval(self.MandaCurl('var1'))['Var1'])
 		return self.Estado
 	
 	def SonOff_leo(self, client, userdata, message):
@@ -2038,26 +2050,27 @@ def ObtenLista(Ulti = 0, Debug = 0):
 			return pelis
 	# Buscamos en el interior de cada carpeta
 	pelis = []
-	folders = next(os.walk('.'))[1]
-	# En el curro hay que tener en cuenta que si hay al menos una carpeta no hará la lista del resto de pelis
-	if len(folders) > 0:
-		for f in folders:
-			# Nos pasamos a la carpeta si hay subcarpetas. De lo contrario procesamos lo que hay en la actual
-			os.chdir(f)
-			# Generamos la lista teniendo en cuenta las distintas extensiones
-			pelis += glob.glob('*.mkv') + glob.glob('*.wmv') + glob.glob('*.mp4') + glob.glob('*.avi')
-			# La lista de las carpetas. Tenemos un problema cuando la carpeta está vacía, aunque desconozco el porqué.
-			carpetas = next(os.walk('.'))[1]
-			if len(carpetas) > 0:
-				pelis.extend(carpetas)
-			# Volvemos a la carpeta padre
-			os.chdir('..')
-	else:
-		pelis += glob.glob('*.mkv') + glob.glob('*.wmv') + glob.glob('*.mp4') + glob.glob('*.avi')
-	# Las ordenamos alfabéticamente
 	if Ulti:
+		pelis += glob.glob('*.mkv') + glob.glob('*.wmv') + glob.glob('*.mp4') + glob.glob('*.avi')
 		pelis.sort(key=os.path.getmtime, reverse=True)
 	else:
+		folders = next(os.walk('.'))[1]
+		# En el curro hay que tener en cuenta que si hay al menos una carpeta no hará la lista del resto de pelis
+		if len(folders) > 0:
+			for f in folders:
+				# Nos pasamos a la carpeta si hay subcarpetas. De lo contrario procesamos lo que hay en la actual
+				os.chdir(f)
+				# Generamos la lista teniendo en cuenta las distintas extensiones
+				pelis += glob.glob('*.mkv') + glob.glob('*.wmv') + glob.glob('*.mp4') + glob.glob('*.avi')
+				# La lista de las carpetas. Tenemos un problema cuando la carpeta está vacía, aunque desconozco el porqué.
+				carpetas = next(os.walk('.'))[1]
+				if len(carpetas) > 0:
+					pelis.extend(carpetas)
+				# Volvemos a la carpeta padre
+				os.chdir('..')
+		else:
+			pelis += glob.glob('*.mkv') + glob.glob('*.wmv') + glob.glob('*.mp4') + glob.glob('*.avi')
+		# Las ordenamos alfabéticamente
 		pelis.sort()
 	return pelis
 	
