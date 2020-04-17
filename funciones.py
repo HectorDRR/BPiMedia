@@ -330,8 +330,8 @@ class SonoffTH:
 		mes = mes - 9
 	# A partir de Enero y hasta Marzo, aumentamos los 3º anteriores + 1
 	else:
-		if mes < 4 :
-			mes = 3 + mes
+		if mes < 5 :
+			mes = 2 + mes
 		else:
 			mes = 0
 	# Y por ahora, asumimos que Mayo va a estar calentito y que vamos a mantener la consigna mínima de 35º de Abril a Septiembre
@@ -363,7 +363,7 @@ class SonoffTH:
 		# Pedimos Estado
 		self.LeeEstado()
 	
-	def Controla(self, Modo, TMax = env.TEMPERATURA, Tiempo = 0):
+	def Controla(self, Modo, TMax = env.TEMPERATURA, Tiempo = 0, Debug = False):
 		""" Función encargada de controlar el SonOff de la placa a través de MQTT.
 		Si Controla: 0 Paramos la placa
 					 1 Activamos manualmente con opción de tiempo para desonexión automática
@@ -394,15 +394,11 @@ class SonoffTH:
 		Modo = int(Modo)
 		TMax = int(TMax)
 		Teimpo = int(Tiempo)
-		if (Modo == 0 and self.LeeEstado() == 'ON'):
-			# Paramos el SonOff
-			#self.client.publish('cmnd/' + self.Topico + '/POWER', 'OFF')
+		if (Modo == 0 and self.Estado == 1):
 			self.MandaCurl('Power Off')
-			if self.Debug:
-				print(self.Topico + ': Power Off ' + self.LeeEstado())
 			Log('Desactivamos la ' + self.Topico + ' manualmente', self.Debug)
-			return
-		if (Modo == 1 and self.Estado == 'OF'):
+			return self.Temperatura
+		if (Modo == 1 and self.Estado == 0):
 			if Tiempo == 0:
 				# Activamos el SonOff
 				#self.client.publish('cmnd/' + self.Topico + '/POWER', 'ON')
@@ -425,30 +421,35 @@ class SonoffTH:
 			return
 		if Modo == 4:
 			# Reducimos 2º por cada vez que se haya apretado el botón que lo obtenemos de mem1
-			if Self.Mem1 > 0:
-				Log('Reducimos la temperatura objetivo en base a las veces que se ha apretado el botón: ' + str(self.TMin) + '-' + str(self.Var1 * 2), self.Debug)
-				self.TMin = self.Tmin - (Self.Var1 * 2)
+			if self.Var1 > 0:
+				Log('Reducimos la temperatura objetivo en base a las veces que se ha apretado el botón: ' + str(self.TMin) + '-' + str(self.Var1 * 2) + 'º', self.Debug)
+				self.TMin = self.TMin - (self.Var1 * 2)
 			# Si la temperatura está por debajo de la requerida
-			if self.LeeTemperatura() < self.TMin:
+			if self.Temperatura < self.TMin:
 				# En caso de problema leyendo la temperatura
 				if self.Temperatura == 0:
 					Log('Hemos tenido problemas leyendo la Temperatura de la ' + self.Topico)
-					return False
-				# Calculamos el tiempo necesario para llegar a la temperatura deseada. Primero obtenemos los grados de diferencia
-				temperatura = self.TMin - self.Temperatura
-				# En el caso de la placa, partiendo de 2 kW de resistencia y 200 l de depótiso obtenemos unos 7 minutos. 1º = 4.180 Julios x kg = 4.180 * 200 kg = 836.000 J / 2.000 W = 418 seg.
-				grado = 418
-				Tiempo = temperatura * grado
+					return self.Temperatura
 				# Si está desactivada, la activamos. El tiempo en el PulseTime en segundos hay que sumarle 100 ya que los 100
-				# primero se miden en décimas de segundo. Se tiene que usar un número PulseTimex que también se usará en el Powerx
-				if self.Estado == 'OF':
+				# primeros se miden en décimas de segundo. Se tiene que usar un número PulseTimex que también se usará en el Powerx
+				if self.Estado == 0:
+					# Calculamos el tiempo necesario para llegar a la temperatura deseada. Primero obtenemos los grados de diferencia
+					temperatura = self.TMin - self.Temperatura
+					# En el caso de la placa, partiendo de 2 kW de resistencia y 200 l de depótiso obtenemos unos 7 minutos. 1º = 4.180 Julios x kg = 4.180 * 200 kg = 836.000 J / 2.000 W = 418 seg.
+					grado = 418
+					Tiempo = temperatura * grado
 					Log('Activamos la ' + self.Topico + ' durante ' + str(Tiempo // 60) + ':' + '{:0>2d} '.format(Tiempo % 60) + 'partiendo de una temperatura de ' + str(self.Temperatura) + 'º para alcanzar los ' + str(self.TMin) + 'º', self.Debug)
-					#self.client.publish('cmnd/' + self.Topico + '/BACKLOG', 'PulseTime1 ' + str(Tiempo + 100) + ';POWER1 ON'')
+					if Debug:
+						print('cmnd/' + self.Topico + '/BACKLOG', 'PulseTime1 ' + str(Tiempo + 100) + ';POWER1 ON')
 					# Definimos el PulseTime y activamos la placa
 					self.MandaCurl('BACKLOG PulseTime1 ' + str(Tiempo + 100) + ';POWER1 ON')
 				else:
-					Log('La placa ya esta activa y quedan ' + self.MandaCurl('PulseTime1'))
-			Log('Terminamos el control de la ' + self.Topico + ' con una temperatura de ' + str(self.Temperatura) + 'º y quedan ' + self.MandaCurl('PulseTime1'), self.Debug)
+					# Comprobamos el tiempo del PulseTime que queda pendiente
+					if self.Queda == 0:
+						Log('Ha habido algún problema puesto que el remaining está a 0 pero la placa está encendida. Apagamos', Debug)
+						self.Controla(0)
+					else:
+						Log('La placa ya esta activa y quedan ' + str(self.Queda) + ' segundos', Debug)
 		return True
 
 	def LeeEstado(self):
@@ -461,9 +462,12 @@ class SonoffTH:
 				cuantos = 3
 			else:
 				cuantos += 1
-		self.Estado = eval(self.MandaCurl('Power'))['POWER'][0:2]
-		# Leemos también el contenido de Var1 para saber cuantas veces se ha activado la bomba hoy
-		self.Var1 = int(eval(self.MandaCurl('var1'))['Var1'])
+		# Leemos el estado de un status puesto que si mandamos un power se resetea el PulseTime y no se apaga la placa
+		self.Estado = eval(self.MandaCurl('status'))['Status']['Power']
+		# Leemos el contenido de Var1 para saber cuantas veces se ha activado la bomba hoy
+		self.Var1 = int(eval(self.MandaCurl('var1'))['Var1'][0])
+		# Leemos si queda tiempo pendiente del PulseTime1
+		self.Queda = eval(self.MandaCurl('PulseTime1'))['PulseTime1']['Remaining']
 		return self.Estado
 	
 	def SonOff_leo(self, client, userdata, message):
@@ -478,9 +482,9 @@ class SonoffTH:
 		if 'StatusSNS' in self.mensaje:
 			# Extraemos la temperatura
 			self.Temperatura = int(self.mensaje["StatusSNS"]["DS18B20"]["Temperature"])
-		elif 'POWER' in self.mensaje:
+		elif 'Power' in self.mensaje:
 			# Extraemos el estado
-			self.Estado = self.mensaje["POWER"][0:2]
+			self.Estado = self.mensaje['Status']["Power"]
 		return
 
 	def LeeTemperatura(self):
@@ -647,7 +651,7 @@ def Bomba(Debug = False):
 	# Creamos las instancias
 	bomba = SonoffTH('bomba', Debug)
 	# Si está en funcionamiento salimos
-	if bomba.Estado == 'ON':
+	if bomba.Estado == 1:
 		Log('La bomba está conectada, así que no la activamos', Debug)
 		return
 	# Activamos la bomba durante env.TBOMBA segundos
@@ -689,7 +693,7 @@ def BombaConSensor(Debug = False):
 	#bomba.Controla (4, TMax = 35)
 	# Lo dejamos inutilizado hasta confirmar que el control embebido está funcionando correctamente
 	# Volvemos a activarlo para hacer pruebas de calibración.
-	while (bomba.Estado == 'OF' and bomba.Temperatura < temperatura):
+	while (bomba.Estado == 0 and bomba.Temperatura < temperatura):
 		# Vamos comprobando la temperatura cada 10 segundos para un total de x segundos y después esperamos
 		for f in range(0, 6):
 			# Activamos la bomba durante x segundos y esperamos 60 más para que llegue el calor al sensor
@@ -2164,7 +2168,7 @@ def PasaaBD(Fichero = '/var/log/placa.log', Debug = False):
 		os.system('zip -m logs.zip placa_' + time.strftime('%Y%m%d') + '.log')
 		Log('Terminamos por hoy la importación de datos del log de la Placa a la BD con el ' + f[0:15] + '  y hemos importado ' + str(contador) + ' valores y comprimido el log')
 
-def Placa(Quehacemos = 4, Tiempo = 0):
+def Placa(Quehacemos = 4, Tiempo = 0, Debug = False):
 	""" Función encargada de controlar el SonOff de la placa a través de MQTT.
 	Si Quehacemos: 0 Paramos la placa
 				   1 Activamos la placa
@@ -2187,20 +2191,13 @@ def Placa(Quehacemos = 4, Tiempo = 0):
 				Log('Borramos TodosBañados')
 			Log('Ya se han bañado todos así que no activamos placa')
 			return
-		# Comprobamos si está corriendo ya el control de la placa. En caso de que no lo esté solo devolverá 3 procesos: el bash que lanza el cron, el de Botones y el pgrep
-		# Si lo está devuelve 4 en caso de que se haya lanzado por el cron, lo más habitual
-		#proceso = list(os.popen('pgrep -af Placa'))
-		#print(proceso)
-		#if len(proceso) > 3:
-			#Log('Ya está corriendo el proceso de control de la Placa, por lo que salimos')
-			#return
-	# Creamos la instancia de la placa
-	placa = SonoffTH('placa', True)
-	if (placa.LeeTemperatura() >= placa.TMin and Quehacemos == 4):
-		Log('La temperatura del agua está a ' + str(placa.Temperatura) + 'º y la consigna es de ' + str(placa.TMin) + 'º, por lo que no activamos la placa', True)
-	else:
-		# En caso de control sencillo, como ya está programado en la clase lo pasamos directamente
-		placa.Controla(Quehacemos, Tiempo = Tiempo)
+		# Creamos la instancia de la placa
+		placa = SonoffTH('placa', Debug)
+		if (placa.Temperatura >= placa.TMin - (placa.Var1 * 2) and Quehacemos == 4):
+			Log('La temperatura del agua está a ' + str(placa.Temperatura) + 'º y la consigna es de ' + str(placa.TMin) + '-' + str(placa.Var1 * 2) + 'º, por lo que no activamos la placa', True)
+	# Como ya está programado en la clase lo pasamos directamente
+	placa.Controla(Quehacemos, Tiempo = Tiempo, Debug = Debug)
+	del(placa)
 	return placa.Temperatura
 
 def Prueba(Param, Debug = False):
