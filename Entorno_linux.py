@@ -42,4 +42,4 @@ ATTRIB = 'chmod '
 # Consigna de temperatura de la placa
 TEMPERATURA = 33
 # Tiempo de funcionamiento de la bomba
-TBOMBA = 60
+TBOMBA = 50

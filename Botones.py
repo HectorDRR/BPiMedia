@@ -37,13 +37,13 @@ def Boton_detecta(pkt):
 
 def Leo_Boton(client, userdata, message):
 	""" Esta función es llamada cada vez que llega un mensaje por MQTT del tópico al que nos hemos subscrito.
-		Como solo esperamos un mensaje, solo procedemos a realizar la acción sin ningún control adicional
+		En este caso nos hemos suscrito a dos mensaje, el NOMAS y el POWER ON para controlar cuantos quedan por bañarse
 	"""
-	#import json
+	import json
 	# Lo importamos en formato json
-	#mensaje = json.loads(message.payload.decode("utf-8"))
-	#if Debug:
-		#Log('Debug, mensaje: ' + str(mensaje))
+	mensaje = json.loads(message.payload.decode("utf-8"))
+	if Debug:
+		Log('Debug, mensaje: ' + str(mensaje))
 	# Llamamos a bin/bañados.sh que termina con el proceso de la placa, si está corriendo, crea el fichero '/tmp/TodosBañados' y para la placa
 	if not os.path.exists('/tmp/TodosBañados'):
 		Log('No se va a bañar nadie más, ' + str(os.system('/home/hector/bin/bañados.sh')))
