@@ -201,35 +201,57 @@ class Capitulo:
 		Log('Pasado (' + quehacemos + ') ' + self.Todo + ' a ' + Donde + self.Serie)
 
 class Pelicula:
-	""" Clase para trabajar con las películas
+	""" Clase para trabajar con las películas. Depende de funciones externas a la clase: LeeBD, Renombra
 	"""
 	
-	def __init__(self, Todo, Tipo = 'Pelis', Disco = 'Ultimas'):
+	def __init__(self, Todo, Tipo = 'Ultimas', Debug = False):
 		""" Inicializamos la clase
 		"""
 		self.Todo = Todo
+		# Pasamos el tipo *_(Borradas, Cortos, Documentales, Infantiles, Pelis, SD, Vistas). Si no hay _ son Ultimas
+		if Tipo.find('_') > 0:
+			self.Tipo = Tipo[Tipo.find('_')+1:]
+			self.Disco = Tipo[0:Tipo.find('_')]
+		else:
+			self.Tipo = Tipo
+			self.Disco = Tipo
+		# Obtenemos el título
+		self.Titulo = self.Todo[0:-4]
 		# Obtenemos el año de la peli del título
 		if Todo.find('(') > 0:
 			try:
 				self.Año = int(Todo[Todo.find(')')-4:Todo.find(')')])
 			except:
-				Log('El nombre de la peli tiene problemas con los paréntesis: ' + Todo, True)
+				Log('El nombre de la peli tiene problemas con los paréntesis, intentamos renombrar ' + Todo, True)
 				# Lo intentamos por aquí para seguir con el proceso
 				self.Año = int(self.SacaInfo('year'))
+				if self.Año > 10:
+					# Confirmamos que la ruta es correcta asumiendo que el disco está montado en env.HDG: Tipo / Letra / Todo Será necesario estar en el raiz del disco
+					self.Ruta = env.HDG + self.Tipo + env.DIR + self.Todo[0] + env.DIR
+					# Guardamos la ruta actual
+					donde = os.getcwd()
+					# Nos vamos a la ruta de la peli
+					os.chdir(self.Ruta)
+					if os.path.exists(self.Todo):
+						# Como ya tiene el paréntesis, añadimos un espacio y el año y cogemos parte del título
+						self.RenPeli(self.Todo[:-5] + ' ' + str(self.Año) + ')')
+						# Y actualizamos el nombre y el título
+						self.Todo = Todo.replace(')', ' ' + str(self.Año) + ')')
+						self.Titulo = self.Todo[0:-4]
+
+						print('Cambiado ' + Todo + ' a ' + self.Todo)
+					# Volvemos a la ruta inicial
+					os.chdir(donde)
 		else:
 			# Si no está en el título, lo sacamos del .nfo o el .tgmd
 			self.Año = int(self.SacaInfo('year'))
 		# Si SacaInfo ha dado un error
 		if self.Año < 10:
 			self.Año = 0
-		# Obtenemos el título
-		self.Titulo = Todo[0:Todo.find('(')-1]
+		# Guardamos la ruta asumiendo env.HDG como la inicial
+		self.Ruta = env.HDG + self.Tipo + env.DIR + self.Todo[0] + env.DIR		
 		# Obtenemos la extensión
-		self.Extension = Todo[-3:]
-		# Pasamos el tipo (Borradas, Cortos, Documentales, Infantiles, Pelis, SD, Vistas)
-		self.Tipo = Tipo
-		# Pasamos la Ubicación, por ahora manualmente
-		self.Disco = Disco
+		self.Extension = self.Todo[-3:]
 		# Obtenemos el género
 		genero = self.SacaInfo('genre')
 		# Si ha habido algún error extrayendo la información
@@ -266,11 +288,11 @@ class Pelicula:
 					with zipfile.ZipFile(env.MM + 'Msheets/' + self.Todo + '.tgmd') as zip:
 						zip.extract('NFO', path=env.TMP)
 					if os.path.getsize(env.TMP + 'NFO') < 40:
-						Log('1: Ha habido un problema con el fichero de metadatos: ' + self.Todo)
+						Log('1: Ha habido un problema con el fichero de metadatos: ' + self.Todo, Fichero = env.PLANTILLAS + 'NoNfo.log')
 						os.remove(env.TMP + 'NFO')
 						return 1
 				except zipfile.BadZipFile as e:
-					Log('2: Ha habido un problema descomprimiendo el supuesto zip: ' + self.Todo, True)
+					Log('2: Ha habido un problema descomprimiendo el supuesto zip: ' + self.Todo, Fichero = env.PLANTILLAS + 'NoNfo.log')
 					return 2
 				ruta = env.TMP + 'NFO'
 			else:
@@ -282,10 +304,10 @@ class Pelicula:
 		try:
 			xmlParametro = dom.getElementsByTagName(P1)[0].toxml()
 		except ValueError as e:
-			Log('4: No se ha encontrado el ' + p1 + ' de "' + self.Todo + '", ' + e)
+			Log('4: No se ha encontrado el ' + p1 + ' de "' + self.Todo + '", ' + e, Fichero = env.PLANTILLAS + 'NoNfo.log')
 			return 4
 		except IndexError as e:
-			Log('5: Ha habido un problem con el ' + P1 + ' de "' + self.Todo + '", ' + str(e))
+			Log('5: Ha habido un problem con el ' + P1 + ' de "' + self.Todo + '", ' + str(e), Fichero = env.PLANTILLAS + 'NoNfo.log')
 			return 5
 		xmlParametro = xmlParametro.replace('<' + P1 + '>', '').replace('</' + P1 + '>', '')
 		if ruta == env.TMP + 'NFO':
@@ -294,7 +316,7 @@ class Pelicula:
 		if P1 == 'genre':
 			xmlParametro = xmlParametro.replace('<name>','').replace('</name>','').strip().split()
 		# El trailer que en ocasiones viene con un formato 'plugin'
-		if P1 == 'trailer':
+		if P1 == 'trailer' and xmlParametro[0:5] == 'plugi':
 			xmlParametro = 'https://www.youtube.com/watch?v=' + xmlParametro.split('=')[2]
 		return xmlParametro
 
@@ -305,17 +327,42 @@ class Pelicula:
 		# Obtenemos el trailer
 		trailer = self.SacaInfo('trailer')
 		# Emepezamos a formar la línea
-		linea = '<td valign="bottom" width="25%"><p align="center"><a href="Msheets/' + self.Todo + '_sheet.jpg" target="_Sheet" title="' + self.Disco +'"'
+		linea = '<td valign="bottom" width="25%"><p align="center"><a href="Msheets/' + self.Todo + '_sheet.jpg" target="_Sheet" title="' + self.Disco
+		if not self.Disco == 'Ultimas':
+			linea = linea + '_' + self.Tipo
 		if Normal:
-			linea = linea + '><img src="caratulas/' + self.Todo[:-3] + 'jpg" \>'
+			linea = linea + '"><img src="caratulas/' + self.Todo[:-3] + 'jpg" \>'
 		else:
-			linea = linea + ' class="hover-lib" id="caratulas/' + self.Todo[:-3] + 'jpg">'
+			linea = linea + '" class="hover-lib" id="caratulas/' + self.Todo[:-3] + 'jpg">'
 		linea = linea + '<br /><font size="-1">' + self.Todo + '</font></a>\n'
 		if type(trailer) == str:
 			linea = linea + ' <a href="' + trailer + '" target="_trailer">[T]</a>'
 		linea = linea + '</td>\n'
 		return linea
-		
+
+	def RenPeli(self, P2, DB = False):
+		"""Se encarga de renombrar todos los ficheros relacionados con una película para el caso de que haya habido algún 
+		problema con su nomenclatura
+		P2 = Nombre correcto
+		DB = True si queremos también hacer el cambio en la BD. Si ya está abierta, por ejemplo desde GeneraListaBD nos da un error	sqlite3.OperationalError: database is locked
+		"""
+		# Primero renombramos la película en la carpeta local
+		Renombra(self.Titulo, P2)
+		# Luego la carátula
+		os.chdir(env.MM + 'caratulas')
+		Renombra(self.Titulo, P2)
+		# Después la información y la sheet
+		os.chdir(env.MM + 'Msheets')
+		Renombra(self.Titulo, P2)
+		# Y por último, en la BD
+		if DB:
+			if self.Disco == 'Ultimas':
+				tabla = 'ultimas'
+			else:
+				tabla = 'pelis'
+			LeeBD('update ' + tabla + ' set titulo="' + P2 + '" where titulo="' + self.Titulo + '"')
+		return
+	
 class SonoffTH:
 	""" Para manipular los SonOff con sensor de temperatura
 	"""
@@ -362,6 +409,10 @@ class SonoffTH:
 			self.LeeTemperatura()
 		# Pedimos Estado
 		self.LeeEstado()
+		# Reducimos 2º por cada vez que se haya apretado el botón que lo obtenemos de Var1
+		if self.Var1 > 0:
+				Log('Reducimos la temperatura objetivo en base a las veces que se ha apretado el botón: ' + str(self.TMin) + '-' + str(self.Var1 * 2) + 'º', self.Debug)
+				self.TMin = self.TMin - (self.Var1 * 2)
 	
 	def Controla(self, Modo, TMax = env.TEMPERATURA, Tiempo = 0, Debug = False):
 		""" Función encargada de controlar el SonOff de la placa a través de MQTT.
@@ -408,7 +459,7 @@ class SonoffTH:
 				Log('Activamos la ' + self.Topico + ' manualmente', self.Debug)
 			else:
 				# Activamos el SonOff por un tiempo determinado. El tiempo nos viene en segundos pero el SonOff lo recibe en ms
-				#self.client.publish('cmnd/' + self.Topico + '/BACKLOG', 'POWER ON;DELAY ' + str(Tiempo * 10) + ';POWER OFF')
+				#self.client.publish('cmnd/' + self.Topico + '/BACKLOG', 'PulseTime1 ' + str(tiempo2) + ';Power1 On')
 				# Para adaptarlo al Pulsetime primero vemos si son más de 10 segundos
 				if Tiempo > 10:
 					tiempo2 = Tiempo + 100
@@ -420,18 +471,13 @@ class SonoffTH:
 				Log('Activamos la ' + self.Topico + ' manualmente durante ' + str(Tiempo) + ' segundos', self.Debug)
 			return
 		if Modo == 4:
-			# Reducimos 2º por cada vez que se haya apretado el botón que lo obtenemos de mem1
-			if self.Var1 > 0:
-				Log('Reducimos la temperatura objetivo en base a las veces que se ha apretado el botón: ' + str(self.TMin) + '-' + str(self.Var1 * 2) + 'º', self.Debug)
-				self.TMin = self.TMin - (self.Var1 * 2)
 			# Si la temperatura está por debajo de la requerida
 			if self.Temperatura < self.TMin:
 				# En caso de problema leyendo la temperatura
 				if self.Temperatura == 0:
 					Log('Hemos tenido problemas leyendo la Temperatura de la ' + self.Topico)
 					return self.Temperatura
-				# Si está desactivada, la activamos. El tiempo en el PulseTime en segundos hay que sumarle 100 ya que los 100
-				# primeros se miden en décimas de segundo. Se tiene que usar un número PulseTimex que también se usará en el Powerx
+				# Si está desactivada, la activamos. 
 				if self.Estado == 0:
 					# Calculamos el tiempo necesario para llegar a la temperatura deseada. Primero obtenemos los grados de diferencia
 					temperatura = self.TMin - self.Temperatura
@@ -441,7 +487,9 @@ class SonoffTH:
 					Log('Activamos la ' + self.Topico + ' durante ' + str(Tiempo // 60) + ':' + '{:0>2d} '.format(Tiempo % 60) + 'partiendo de una temperatura de ' + str(self.Temperatura) + 'º para alcanzar los ' + str(self.TMin) + 'º', self.Debug)
 					if Debug:
 						print('cmnd/' + self.Topico + '/BACKLOG', 'PulseTime1 ' + str(Tiempo + 100) + ';POWER1 ON')
-					# Definimos el PulseTime y activamos la placa
+					# Definimos el PulseTime y activamos la placa. El tiempo en el PulseTime en segundos hay que sumarle 100 
+					# ya que los 100 primeros se miden en décimas de segundo. Se tiene que usar un número PulseTimex que también
+					# se usará en el Powerx
 					self.MandaCurl('BACKLOG PulseTime1 ' + str(Tiempo + 100) + ';POWER1 ON')
 				else:
 					# Comprobamos el tiempo del PulseTime que queda pendiente
@@ -842,25 +890,31 @@ def BP(Peli, Comentario):
 		Log('Borramos ' + Peli + ' con el comentario: ' + Comentario, True)
 	return
 
-def Clasifica(Carpeta = './'):
+def Clasifica():
 	""" Función para pasar las películas de los discos a carpetas organizadas alfabéticamente por la primera letra 
 	ya que con discos tan grandes es un suplicio buscarlas con el WDTV.
+	La actualizamos para hacerlo en todas las carpetas útiles y no carpeta a carpeta
 	"""
-	# Nos pasamos a la carpeta de destino
-	os.chdir(Carpeta)
-	# Cargamos la lista de ficheros
-	filenames = next(os.walk('.'))[2]
-	# La ordenamos alfabéticamente
-	filenames.sort()
-	letra = ''
-	# Respasamos la lista y cada vez que encontramos una primera letra nueva creamos la carpeta y pasamos los ficheros con
-	# esa letra a la carpeta
-	for f in filenames:
-		if not f[0] == letra:
-			letra = f[0]
-			if not os.path.exists(letra):
-				os.mkdir(letra)
-		os.rename(f, letra + env.DIR + f)
+	carpetas = ['Pelis', 'Documentales', 'Vistas', 'Infantiles', 'Musica', 'Cortos', 'SD']
+	for car in carpetas:
+		if not os.path.exists(car):
+			continue
+		# Nos pasamos a la carpeta de destino
+		os.chdir(car)
+		# Cargamos la lista de ficheros
+		filenames = next(os.walk('.'))[2]
+		# La ordenamos alfabéticamente
+		filenames.sort()
+		letra = ''
+		# Respasamos la lista y cada vez que encontramos una primera letra nueva creamos la carpeta y pasamos los ficheros con
+		# esa letra a la carpeta
+		for f in filenames:
+			if not f[0] == letra:
+				letra = f[0]
+				if not os.path.exists(letra):
+					os.mkdir(letra)
+			os.rename(f, letra + env.DIR + f)
+		os.chdir('..')
 	return			
 
 def Copia():
@@ -1148,7 +1202,7 @@ def CreaWeb(p1 = 'Ultimas', Pocas = 0, Debug = False):
 		os.system(env.DEL + env.TMP + p1)
 	return
 
-def CreaWebO(Titulo = 'Ultimas', Filtro = 'SELECT * FROM ultimas', Modo = True, Debug = True):
+def CreaWebO(Titulo = 'Ultimas', Filtro = 'SELECT * FROM ultimas', Modo = False, Debug = False):
 	""" Función para crear página web de películas/series obtenidas de la BD
 		Modo en True crea las páginas con carátulas, estilo la de Últimas, el Modo False solo muestra las carátulas en mouseover
 		Filtro define el recordset de películas que vamos a extraer de la BD
@@ -1187,7 +1241,7 @@ def CreaWebO(Titulo = 'Ultimas', Filtro = 'SELECT * FROM ultimas', Modo = True, 
 		# Creamos el objeto pasando los campos título, tipo y disco
 		if Debug:
 			print(f[1])
-		p = Pelicula(f[1], f[6], f[2])
+		p = Pelicula(f[1], f[2])
 		# Añadimos la línea de la película con la marca de índice si existe después del 'align="center">'
 		web.append(p.LineaWeb(Modo).replace('center">', 'center">' + marca))
 		cuenta += 1
@@ -1343,7 +1397,7 @@ def GeneraLista(Listado, Pelis, Serie = False, Debug = False):
 			file.write(f + ':' + Listado + ':' + comen + capis + '\n')
 	return
 
-def GeneraListaBD(Listado, Pelis, Serie = False, Ultimas = False, Debug = False):
+def GeneraListaBD(Listado, Pelis, Serie = False, Debug = False):
 	""" Pequeña función para generar la lista de películas o series con sus comentarios si los hubiera.
 	La separamos de la función principal para poder llamarla cuando realizamos la lista de últimas.
 	Hasta que desarrollemos mejor el sistema, hacemos una limpia de la tabla antes de procesar todas las pelis.
@@ -1357,24 +1411,24 @@ def GeneraListaBD(Listado, Pelis, Serie = False, Ultimas = False, Debug = False)
 	La BD le hemos creado con el siguiente schema:
 	CREATE TABLE pelis (ID INTEGER PRIMARY KEY AUTOINCREMENT, titulo text Unique, disco text, comentarios text, año int, genero text, tipo text);
 	CREATE TABLE series (ID INTEGER PRIMARY KEY AUTOINCREMENT, titulo text unique, disco text, comentarios text, año int, genero text, tipo int, capitulos text);
+	CREATE TABLE ultimas (ID INTEGER PRIMARY KEY AUTOINCREMENT, titulo text Unique, disco text, comentarios text, año int, genero text, tipo text);
 	"""
 	import sqlite3
 	
-	# Si estamos listando las vistas activamos el flag
-	if not Serie:
-		tipo = Listado[Listado.find('_')+1:]
-	else:
-		tipo = ''
-	# Si estamos con las últimas cambiamos el nombre de la tabla
-	if Ultimas:
-		tabla = 'ultimas'
-	else:
-		tabla = 'pelis'
+	if Debug:
+		print(Listado, Serie)
 	# Abrimos la BD y el cursor
 	bd = sqlite3.connect(env.BD)
 	bdcursor = bd.cursor()
+	# Si estamos con las últimas cambiamos el nombre de la tabla
+	if Listado == "Ultimas":
+		tabla = 'ultimas'
+		# Rehacemos la tabla
+		bdcursor.execute('Delete from ultimas')
+	else:
+		tabla = 'pelis'
 	# Por ahora, primero limpiamos de la tabla todos los registros de este disco y tipo
-	bdcursor.execute('Delete from ' + tabla + ' where disco = "' + Listado + '"')
+	bdcursor.execute('Delete from pelis where disco = "' + Listado[0:Listado.find('_')] + '"')
 	if not Debug:
 		bd.commit()
 	# Procesamos la lista añadiendo los comentarios si los hubiera
@@ -1393,7 +1447,8 @@ def GeneraListaBD(Listado, Pelis, Serie = False, Ultimas = False, Debug = False)
 			que = f[:-3]
 			capis = ''
 			# Creamos el objeto
-			peli = Pelicula(f)
+			peli = Pelicula(f, Listado)
+		# Si existe comentario, lo añadimos
 		if os.path.exists(que + 'txt'):
 			with open(que + 'txt') as fiche:
 				try:
@@ -1403,12 +1458,10 @@ def GeneraListaBD(Listado, Pelis, Serie = False, Ultimas = False, Debug = False)
 					continue
 			comen = comen[:-1]
 		# Decidimos la tabla donde meter la información
-		#if Debug:
-		#	print('insert into ' + tabla + ' (titulo, disco, comentarios, año, tipo, genero) values ("' + peli.Todo + '", "' + Listado + '", "' + comen + '", ' + str(peli.Año) + ', "' + peli.Tipo + '", "' + peli.Genero + '")')
 		if Serie:
 			bdcursor.execute('insert into ' + tabla + ' (titulo, disco, comentarios, capis) values (' + f + ', ' + Listado + ', ' + comen + ', ' + capis + ')')
 		else:
-			bdcursor.execute('insert into ' + tabla + ' (titulo, disco, comentarios, año, tipo, genero) values ("' + peli.Todo + '", "' + Listado + '", "' + comen + '", ' + str(peli.Año) + ', "' + peli.Tipo + '", "' + peli.Genero + '")')
+			bdcursor.execute('insert into ' + tabla + ' (titulo, disco, comentarios, año, tipo, genero) values ("' + peli.Todo + '", "' + peli.Disco + '", "' + comen + '", ' + str(peli.Año) + ', "' + peli.Tipo + '", "' + peli.Genero + '")')
 	# Hacemos el commit para que se guarden los cambios y cerramos
 	if not Debug:
 		bd.commit()
@@ -1950,7 +2003,7 @@ def ListaCapitulos2(Serie, Ruta):
 		Log('Capítulos que faltan en ' + Serie + ': ' + saltados, True)
 	return resumen
 	
-def ListaPelis(Ulti = 0, Ruta = env.HDG):
+def ListaPelis(Ulti = 0, Ruta = env.HDG, Debug = False):
 	""" Se encarga de generar la lista de películas de un disco en concreto para después poder procesarla
 	y generar la página web correspondiente.
 	El formato de la lista es peli:etiqueta_carpeta:comentario
@@ -1964,7 +2017,7 @@ def ListaPelis(Ulti = 0, Ruta = env.HDG):
 	if int(Ulti):
 		os.chdir(env.HD)
 		pelis = ObtenLista(1)
-		GeneraLista('HD_Ultimas', pelis)
+		GeneraLista('HD_Ultimas', pelis, Debug)
 	else:
 		# Si no, partimos de que se trata de uno de los disco de almacenamiento
 		# Obtenemos la etiqueta del disco montado en Ruta, por defecto env.HDG (le quitamos la '/' final)
@@ -1976,7 +2029,7 @@ def ListaPelis(Ulti = 0, Ruta = env.HDG):
 			if os.path.exists(Ruta + car + '/'):
 				os.chdir(Ruta + car + '/')
 				pelis = ObtenLista()
-				GeneraListaBD(Etiq + '_' + car, pelis, Debug = True)
+				GeneraListaBD(Etiq + '_' + car, pelis, False, Debug)
 				GeneraLista(Etiq + '_' + car, pelis)
 		# Guardamos el espacio libre en la unidad
 		GuardaLibre(Ruta)
@@ -2284,7 +2337,7 @@ def Renombra(Viejo, Nuevo):
 	if env.SISTEMA == 'Windows':
 		os.system('dir "*' + Nuevo + '*"')
 	else:
-		os.system('ls "*' + Nuevo + '*"')
+		os.system('ls *' + Nuevo.replace(' ', '\\ ').replace('(', '\\(').replace(')', '\\)') + '*')
 	return
 
 def RenPeli(P1, P2):
@@ -2712,8 +2765,8 @@ def Ultimas():
 	# Nos pasamos a la carpeta de las últimas y obtenemos la lista
 	os.chdir(env.HD)
 	lista = ObtenLista(1)
-	GeneraListaBD('Ultimas', lista, Ultimas = True)
-	CreaWebO()
+	GeneraListaBD('Ultimas', lista)
+	CreaWebO(Modo = True)
 	
 if __name__ == "__main__":
 	""" En caso de que se ejecute desde la línea de comando, llamamos a la función dada como parámetro 1
