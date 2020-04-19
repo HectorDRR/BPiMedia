@@ -1034,8 +1034,8 @@ def CreaPaginas():
 	""" Se encarga de crear de una sola vez todas las páginas web de pelis. Útil para cuando actualcemos la BD
 	"""
 	for f in Tipos:
-		CreaWebO(f, 'from pelis where tipo="' + f + '" order by titulo')
-	CreaWebO('Todas', 'from pelis order by titulo')
+		CreaWebO(f, 'where tipo="' + f)
+	CreaWebO('Todas')
 	
 def CreaWeb(p1 = 'Ultimas', Pocas = 0, Debug = False):
 	""" Se encarga de generar las distintas páginas web necesarios para la gestión de las películas y las series.
@@ -1235,13 +1235,18 @@ def CreaWeb(p1 = 'Ultimas', Pocas = 0, Debug = False):
 		os.system(env.DEL + env.TMP + p1)
 	return
 
-def CreaWebO(Titulo = 'Ultimas', Filtro ='FROM ultimas', Modo = False, Debug = False):
+def CreaWebO(Titulo = 'Ultimas', Filtro = '', Modo = False, Debug = False):
 	""" Función para crear página web de películas/series obtenidas de la BD
 		Modo en True crea las páginas con carátulas, estilo la de Últimas, el Modo False solo muestra las carátulas en mouseover
 		Filtro define el recordset de películas que vamos a extraer de la BD
 	"""
 	# Obtenemos la lista de películas
-	lista = LeeBD('SELECT titulo,disco,tipo,trailer ' + Filtro)
+	sql = 'SELECT titulo,disco,tipo,trailer from '
+	if not Titulo = 'Ultimas':
+		sql = sql + ' pelis ' + Filtro + ' order by titulo'
+	else:
+		sql = sql + ' ultimas'
+	lista = LeeBD(sql)
 	# ¿Series o Pelis?
 	que = 'Pel&iacute;culas'
 	# Cargamos la plantilla de la página web
