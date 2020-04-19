@@ -14,6 +14,8 @@ env = __import__('Entorno_' + sys.platform)
 # Aunque la lectura de los ficheros es rápida, creamos una variable global que contenga todas las series para
 # no estarlas cargando cada vez que queremos comprobar un capítulo desde Capitulo.Existe()
 Series = []
+# Creamos una variable con los tipos de películas que procesamos, que a su vez se corresponden con las carpetas y con las páginas web
+Tipos = ['Pelis', 'Documentales', 'Vistas', 'Infantiles', 'Musica', 'Cortos', 'SD']
 
 class Capitulo:
 	""" Tratamiento de capítulos de series, teniendo en cuenta si se manipulan a través de FTP o localmente
@@ -205,8 +207,10 @@ class Pelicula:
 	"""
 	
 	def __init__(self, Todo, Tipo = 'Ultimas', Debug = False):
-		""" Inicializamos la clase
+		""" Inicializamos el objeto. Si el tipo que pasamos contiene un _ estamos metiendo la informaicón de undisco a la BD.
+		En caso contrario, obtendremos las propiedades de la BD, teneindo en cuenta que las últimas están en una tabla diferente.
 		"""
+		self.Debug = Debug
 		self.Todo = Todo
 		# Pasamos el tipo *_(Borradas, Cortos, Documentales, Infantiles, Pelis, SD, Vistas). Si no hay _ son Ultimas
 		if Tipo.find('_') > 0:
@@ -217,21 +221,37 @@ class Pelicula:
 			self.Disco = Tipo
 		# Obtenemos el título
 		self.Titulo = self.Todo[0:-4]
-		# Obtenemos el año de la peli del título
-		if Todo.find('(') > 0:
+		# Guardamos la ruta asumiendo env.HDG como la inicial
+		self.Ruta = env.HDG + self.Tipo + env.DIR + self.Todo[0] + env.DIR		
+		# Obtenemos la extensión
+		self.Extension = self.Todo[-3:]
+		# Obtenemos el año
+		self.ObtenAño()
+		# Obtenemos el género
+		self.Genero = self.SacaInfo('genre')
+		self.Trailer = self.SacaInfo('trailer')
+
+	def ObtenAño(self):
+		""" Obtenemos el año de la peli del título o del SacaInfo. Si hay algún error devuelve un valor numérico < 10
+		"""
+		if self.Todo.find('(') > 0:
 			try:
-				self.Año = int(Todo[Todo.find(')')-4:Todo.find(')')])
+				self.Año = int(self.Todo[self.Todo.find(')')-4:self.Todo.find(')')])
 			except:
-				Log('El nombre de la peli tiene problemas con los paréntesis, intentamos renombrar ' + Todo, True)
+				Log('El nombre de la peli tiene problemas con los paréntesis, intentamos renombrar ' + self.Todo, True)
 				# Lo intentamos por aquí para seguir con el proceso
 				self.Año = int(self.SacaInfo('year'))
 				if self.Año > 10:
-					# Confirmamos que la ruta es correcta asumiendo que el disco está montado en env.HDG: Tipo / Letra / Todo Será necesario estar en el raiz del disco
-					self.Ruta = env.HDG + self.Tipo + env.DIR + self.Todo[0] + env.DIR
+					# Confirmamos que la ruta es correcta. Será necesario estar en el raiz del disco
 					# Guardamos la ruta actual
 					donde = os.getcwd()
 					# Nos vamos a la ruta de la peli
-					os.chdir(self.Ruta)
+					if os.path.exists(self.Ruta):
+						os.chdir(self.Ruta)
+					else:
+						# Hay algún problema con la ruta
+						Log('ObtenAño no encuentra la ruta adecuada a ' + self.Todo)
+						return 5
 					if os.path.exists(self.Todo):
 						# Como ya tiene el paréntesis, añadimos un espacio y el año y cogemos parte del título
 						self.RenPeli(self.Todo[:-5] + ' ' + str(self.Año) + ')')
@@ -248,22 +268,7 @@ class Pelicula:
 		# Si SacaInfo ha dado un error
 		if self.Año < 10:
 			self.Año = 0
-		# Guardamos la ruta asumiendo env.HDG como la inicial
-		self.Ruta = env.HDG + self.Tipo + env.DIR + self.Todo[0] + env.DIR		
-		# Obtenemos la extensión
-		self.Extension = self.Todo[-3:]
-		# Obtenemos el género
-		genero = self.SacaInfo('genre')
-		# Si ha habido algún error extrayendo la información
-		if type(genero) == int:
-			print('Error: %d en %s' % (genero, self.Todo))
-			self.Genero = ''
-		else:
-			son = ''
-			# Nos suele venir como una lista a veces con ' ' otras con '/' así que hacemos una limpieza y dejamos solo un espacio
-			for g in genero:
-				son = son.strip() + ' ' + g.strip().replace('/', ' ') + ' '
-			self.Genero = son.strip()
+		return self.Año
 
 	def __str__(self):
 		""" Para poder imprimir la información de un plumazo
@@ -290,14 +295,14 @@ class Pelicula:
 					if os.path.getsize(env.TMP + 'NFO') < 40:
 						Log('1: Ha habido un problema con el fichero de metadatos: ' + self.Todo, Fichero = env.PLANTILLAS + 'NoNfo.log')
 						os.remove(env.TMP + 'NFO')
-						return 1
+						return ''
 				except zipfile.BadZipFile as e:
 					Log('2: Ha habido un problema descomprimiendo el supuesto zip: ' + self.Todo, Fichero = env.PLANTILLAS + 'NoNfo.log')
-					return 2
+					return ''
 				ruta = env.TMP + 'NFO'
 			else:
 				Log('3: No encontramos el fichero NFO para ' + self.Todo, Fichero = env.PLANTILLAS + 'NoNfo.log')
-				return 3
+				return ''
 		with open(ruta, encoding="utf-8") as file:
 			info = file.read()
 		dom = parseString(info)
@@ -305,16 +310,21 @@ class Pelicula:
 			xmlParametro = dom.getElementsByTagName(P1)[0].toxml()
 		except ValueError as e:
 			Log('4: No se ha encontrado el ' + p1 + ' de "' + self.Todo + '", ' + e, Fichero = env.PLANTILLAS + 'NoNfo.log')
-			return 4
+			return ''
 		except IndexError as e:
 			Log('5: Ha habido un problem con el ' + P1 + ' de "' + self.Todo + '", ' + str(e), Fichero = env.PLANTILLAS + 'NoNfo.log')
-			return 5
+			return ''
 		xmlParametro = xmlParametro.replace('<' + P1 + '>', '').replace('</' + P1 + '>', '')
 		if ruta == env.TMP + 'NFO':
 			os.remove(env.TMP + 'NFO')
 		# Algunos casos particulares como el género que vienen varios campos
 		if P1 == 'genre':
 			xmlParametro = xmlParametro.replace('<name>','').replace('</name>','').strip().split()
+			son = ''
+			# Nos suele venir como una lista a veces con ' ' otras con '/' así que hacemos una limpieza y dejamos solo un espacio
+			for g in xmlParametro:
+				son = son.strip() + ' ' + g.strip().replace('/', ' ') + ' '
+				xmlParametro = son.strip()
 		# El trailer que en ocasiones viene con un formato 'plugin'
 		if P1 == 'trailer' and xmlParametro[0:5] == 'plugi':
 			xmlParametro = 'https://www.youtube.com/watch?v=' + xmlParametro.split('=')[2]
@@ -324,8 +334,6 @@ class Pelicula:
 		""" Función para generar la línea en HTML para el listado de películas, tanto el de últimas, que incluye la imagen como
 		el normal que la imagen solo aparece al hacer un mouseover
 		"""
-		# Obtenemos el trailer
-		trailer = self.SacaInfo('trailer')
 		# Emepezamos a formar la línea
 		linea = '<td valign="bottom" width="25%"><p align="center"><a href="Msheets/' + self.Todo + '_sheet.jpg" target="_Sheet" title="' + self.Disco
 		if not self.Disco == 'Ultimas':
@@ -335,8 +343,8 @@ class Pelicula:
 		else:
 			linea = linea + '" class="hover-lib" id="caratulas/' + self.Todo[:-3] + 'jpg">'
 		linea = linea + '<br /><font size="-1">' + self.Todo + '</font></a>\n'
-		if type(trailer) == str:
-			linea = linea + ' <a href="' + trailer + '" target="_trailer">[T]</a>'
+		if len(trailer) > 0:
+			linea = linea + ' <a href="' + self.trailer + '" target="_trailer">[T]</a>'
 		linea = linea + '</td>\n'
 		return linea
 
@@ -914,8 +922,7 @@ def Clasifica():
 	ya que con discos tan grandes es un suplicio buscarlas con el WDTV.
 	La actualizamos para hacerlo en todas las carpetas útiles y no carpeta a carpeta
 	"""
-	carpetas = ['Pelis', 'Documentales', 'Vistas', 'Infantiles', 'Musica', 'Cortos', 'SD']
-	for car in carpetas:
+	for car in Tipos:
 		if not os.path.exists(car):
 			continue
 		# Nos pasamos a la carpeta de destino
@@ -1022,6 +1029,13 @@ def CopiaNuevas(Pen):
 			shutil.copy(f, env.HD)
 			os.system('attrib +a "' + env.HD + f + '"')
 	return
+
+def CreaPaginas():
+	""" Se encarga de crear de una sola vez todas las páginas web de pelis. Útil para cuando actualcemos la BD
+	"""
+	for f in Tipos:
+		CreaWebO(f, 'from pelis where tipo="' + f + '" order by titulo')
+	CreaWebO('Todas', 'from pelis order by titulo')
 	
 def CreaWeb(p1 = 'Ultimas', Pocas = 0, Debug = False):
 	""" Se encarga de generar las distintas páginas web necesarios para la gestión de las películas y las series.
@@ -1221,13 +1235,13 @@ def CreaWeb(p1 = 'Ultimas', Pocas = 0, Debug = False):
 		os.system(env.DEL + env.TMP + p1)
 	return
 
-def CreaWebO(Titulo = 'Ultimas', Filtro = 'SELECT * FROM ultimas', Modo = False, Debug = False):
+def CreaWebO(Titulo = 'Ultimas', Filtro ='FROM ultimas', Modo = False, Debug = False):
 	""" Función para crear página web de películas/series obtenidas de la BD
 		Modo en True crea las páginas con carátulas, estilo la de Últimas, el Modo False solo muestra las carátulas en mouseover
 		Filtro define el recordset de películas que vamos a extraer de la BD
 	"""
 	# Obtenemos la lista de películas
-	lista = LeeBD(Filtro)
+	lista = LeeBD('SELECT titulo,disco,tipo,trailer ' + Filtro)
 	# ¿Series o Pelis?
 	que = 'Pel&iacute;culas'
 	# Cargamos la plantilla de la página web
@@ -1237,7 +1251,7 @@ def CreaWebO(Titulo = 'Ultimas', Filtro = 'SELECT * FROM ultimas', Modo = False,
 	web.insert(3, '\t<title>' + Titulo + '</title>\n')
 	web.insert(15, '<h1>' + Titulo + '</h1>\n')
 	# Para no repetir el índice al principio de la página pero si dejar un enlace
-	lind = lista[0][1][0]
+	lind = lista[0][0][0]
 	# Definimos marca aquí para que la primera película también tenga un marcador
 	marca = '<a name="' + lind + '"></a>'
 	indice = '<p align="center"><a href="#' + lind + '">' + lind + '</a> '
@@ -1247,8 +1261,8 @@ def CreaWebO(Titulo = 'Ultimas', Filtro = 'SELECT * FROM ultimas', Modo = False,
 	cuenta = 1
 	for f in lista:
 		# Tratamos los índices, tanto el general como el insertado en el cambio de letra
-		if not f[1][0] == lind:
-			lind = f[1][0]
+		if not f[0][0] == lind:
+			lind = f[0][0]
 			marca = '<a name="' + lind + '"></a>'
 			indice = indice + '<a href="#' + lind + '">' + lind + '</a> '
 			# En el listado con carátulas no incluímos índices en medio de la tabla
@@ -1259,10 +1273,10 @@ def CreaWebO(Titulo = 'Ultimas', Filtro = 'SELECT * FROM ultimas', Modo = False,
 				cuenta = 1
 		# Creamos el objeto pasando los campos título, tipo y disco
 		if Debug:
-			print(f[1])
-		p = Pelicula(f[1], f[2])
+			print(f[0])
 		# Añadimos la línea de la película con la marca de índice si existe después del 'align="center">'
-		web.append(p.LineaWeb(Modo).replace('center">', 'center">' + marca))
+		linea = LineaWeb(f, Modo)
+		web.append(linea.replace('center">', 'center">' + marca))
 		cuenta += 1
 		if cuenta == 5:
 			cuenta = 1
@@ -1447,7 +1461,7 @@ def GeneraListaBD(Listado, Pelis, Serie = False, Debug = False):
 	else:
 		tabla = 'pelis'
 	# Por ahora, primero limpiamos de la tabla todos los registros de este disco y tipo
-	bdcursor.execute('Delete from pelis where disco = "' + Listado[0:Listado.find('_')] + '"')
+	bdcursor.execute('Delete from pelis where disco = "' + Listado[0:Listado.find('_')] + '" and tipo="' + Listado[Listado.find('_')+1:] + '"')
 	if not Debug:
 		bd.commit()
 	# Procesamos la lista añadiendo los comentarios si los hubiera
@@ -1480,7 +1494,7 @@ def GeneraListaBD(Listado, Pelis, Serie = False, Debug = False):
 		if Serie:
 			bdcursor.execute('insert into ' + tabla + ' (titulo, disco, comentarios, capis) values (' + f + ', ' + Listado + ', ' + comen + ', ' + capis + ')')
 		else:
-			bdcursor.execute('insert into ' + tabla + ' (titulo, disco, comentarios, año, tipo, genero) values ("' + peli.Todo + '", "' + peli.Disco + '", "' + comen + '", ' + str(peli.Año) + ', "' + peli.Tipo + '", "' + peli.Genero + '")')
+			bdcursor.execute('insert into ' + tabla + ' (titulo, disco, comentarios, año, tipo, genero, trailer) values ("' + peli.Todo + '", "' + peli.Disco + '", "' + comen + '", ' + str(peli.Año) + ', "' + peli.Tipo + '", "' + peli.Genero + '", "' + peli.Trailer + '")')
 	# Hacemos el commit para que se guarden los cambios y cerramos
 	if not Debug:
 		bd.commit()
@@ -1510,12 +1524,9 @@ def GuardaHD(Disco = 'HD-TB-8-1'):
 	# Empezamos con las Infantiles
 	if os.path.exists(env.HDG + 'Infantiles/'):
 		GuardaPelis('Infantiles', '4')
-		CreaWeb('Infantiles')
 	# Generamos la lista de películas del disco y la página web
 	ListaPelis()
-	CreaWeb('Todas')
-	CreaWeb('Pelis')
-	CreaWeb('Vistas')
+	CreaPaginas()
 	# Limpiamos las carátulas que hayan quedado en la carpeta env.HD
 	LimpiaHD()
 	Etiq = GuardaLibre(env.HDG)
@@ -1864,6 +1875,24 @@ def LimpiaPuntos(Mascara, Parent = '('):
 	f = sinparent
 	return f
 
+def LineaWeb(Peli, Normal = True):
+	""" Función para generar la línea en HTML para el listado de películas, tanto el de últimas, que incluye la imagen como
+	el normal que la imagen solo aparece al hacer un mouseover
+	"""
+	# Emepezamos a formar la línea
+	linea = '<td valign="bottom" width="25%"><p align="center"><a href="Msheets/' + Peli[0] + '_sheet.jpg" target="_Sheet" title="' + Peli[1]
+	if not Peli[1] == 'Ultimas':
+		linea = linea + '_' + Peli[2]
+	if Normal:
+		linea = linea + '"><img src="caratulas/' + Peli[0][:-3] + 'jpg" \>'
+	else:
+		linea = linea + '" class="hover-lib" id="caratulas/' + Peli[0][:-3] + 'jpg">'
+	linea = linea + '<br /><font size="-1">' + Peli[0] + '</font></a>\n'
+	if len(Peli[3]) > 0:
+		linea = linea + ' <a href="' + Peli[3] + '" target="_trailer">[T]</a>'
+	linea = linea + '</td>\n'
+	return linea
+
 def ListaCapitulos(Serie, Ruta, Debug = False):
 	""" Se encarga de revisar los capítulos de una serie dada para sacar un resumen de los mismos y 
 	detectar si faltan capítulos en alguna temporada o están repetidos.
@@ -2041,14 +2070,13 @@ def ListaPelis(Ulti = 0, Ruta = env.HDG, Debug = False):
 		# Si no, partimos de que se trata de uno de los disco de almacenamiento
 		# Obtenemos la etiqueta del disco montado en Ruta, por defecto env.HDG (le quitamos la '/' final)
 		Etiq = Etiqueta(Ruta[:-1])
-		carpetas = ['Pelis', 'Documentales', 'Vistas', 'Infantiles', 'Musica', 'Cortos', 'SD']
-		for car in carpetas:
+		for car in Tipos:
 			# Si existe la carpeta, la revisamos
 			print(car)
 			if os.path.exists(Ruta + car + '/'):
 				os.chdir(Ruta + car + '/')
 				pelis = ObtenLista()
-				GeneraListaBD(Etiq + '_' + car, pelis, False, Debug)
+				GeneraListaBD(Etiq + '_' + car, pelis, Debug = Debug)
 				GeneraLista(Etiq + '_' + car, pelis)
 		# Guardamos el espacio libre en la unidad
 		GuardaLibre(Ruta)
