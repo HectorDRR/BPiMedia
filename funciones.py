@@ -522,7 +522,7 @@ class SonoffTH:
 	def Bañados(self):
 		""" Leemos el contenido de Var1 para saber cuantas veces se ha activado la bomba hoy
 		"""
-		return int(eval(self.MandaCurl('var1'))['Var1'])
+		return int(eval(self.MandaCurl('var1'))['Var1'][0])
 	
 	@Bañados.setter
 	def Bañados(self, Valor):
@@ -1242,7 +1242,7 @@ def CreaWebO(Titulo = 'Ultimas', Filtro = '', Modo = False, Debug = False):
 	"""
 	# Obtenemos la lista de películas
 	sql = 'SELECT titulo,disco,tipo,trailer from '
-	if not Titulo = 'Ultimas':
+	if not Titulo == 'Ultimas':
 		sql = sql + ' pelis ' + Filtro + ' order by titulo'
 	else:
 		sql = sql + ' ultimas'
@@ -2300,7 +2300,6 @@ def Placa(Quehacemos = 4, Tiempo = 0, Debug = False):
 			Log('La temperatura del agua está a ' + str(placa.Temperatura) + 'º y la consigna es de ' + str(placa.TMin) + 'º, por lo que no activamos la placa', True)
 	# Como ya está programado en la clase lo pasamos directamente
 	placa.Controla(Quehacemos, Tiempo = Tiempo, Debug = Debug)
-	del(placa)
 	return placa.Temperatura
 
 def Prueba(Param, Debug = False):
