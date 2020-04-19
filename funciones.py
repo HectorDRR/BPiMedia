@@ -367,22 +367,6 @@ class SonoffTH:
 	""" Para manipular los SonOff con sensor de temperatura
 	"""
 	#import paho.mqtt.client as mqtt
-	# Definimos como constante, importándola de env., la temperatura mínima del agua hasta que encontremos la manera de hacer un cálculo 
-	# aproximado de manera automática. Hemos visto que en invierno necesitamos un mínimo de 40º mientras que en verano, con el agua de 
-	# base más caliente, 35 grados es suficiente.
-	# Partimos de que en Octubre tenemos que empezar a subir la temperatura del agua y lo hacemos de grado en grado partiendo de 35º
-	mes = time.localtime().tm_mon
-	# A partir de Octubre sencillamente le restamos los 9 meses anteriores y tenemos 1 grado por cada mes hasta Diciembre
-	if mes > 9:
-		mes = mes - 9
-	# A partir de Enero y hasta Marzo, aumentamos los 3º anteriores + 1
-	else:
-		if mes < 5 :
-			mes = 2 + mes
-		else:
-			mes = 0
-	# Y por ahora, asumimos que Mayo va a estar calentito y que vamos a mantener la consigna mínima de 35º de Abril a Septiembre
-	TMin = env.TEMPERATURA + mes
 	
 	def __init__(self, Topico, Debug = False):
 		""" Inicializamos el objeto con el tópico que hemos asignado al SonOff
@@ -390,6 +374,31 @@ class SonoffTH:
 		# Por si queremos imprimir los mensajes
 		self.Debug = Debug
 		self.Topico = Topico
+		# Si en algún momento volvemos a usar el MQTT
+		#InitMQTT(self)
+		# Definimos como constante, importándola de env.TEMPERATURA, la temperatura mínima del agua hasta que encontremos la manera de hacer 
+		# un cálculo aproximado de manera automática. Hemos visto que en invierno necesitamos un mínimo de 40º mientras que en
+		# verano, con el agua de base más caliente, 35 grados es suficiente. Tenemos que buscar como establecer una curva
+		# Partimos de que en Octubre tenemos que subir la temperatura del agua y lo hacemos de grado en grado partiendo de TMin
+		mes = time.localtime().tm_mon
+		# A partir de Octubre sencillamente le restamos los 9 meses anteriores y tenemos 1 grado por cada mes hasta Diciembre
+		if mes > 9:
+			mes = mes - 9
+		# A partir de Enero y hasta Marzo, aumentamos los 3º anteriores + 1
+		else:
+			if mes < 5 :
+				mes = 2 + mes
+			else:
+				mes = 0
+		# Y por ahora, asumimos que Mayo va a estar calentito y que vamos a mantener la consigna mínima de 35º de Abril a Septiembre
+		self.TMin = env.TEMPERATURA + mes
+		# Reducimos 2º por cada vez que se haya apretado el botón que lo obtenemos de Var1
+		if self.Bañados > 0:
+				Log('Reducimos la consigna en base a las veces que se ha apretado el botón: ' + str(self.TMin) + '-' + str(self.Bañados * 2) + 'º', self.Debug)
+				self.TMin = self.TMin - (self.Bañados * 2)
+
+	"""def InitMQTT(self):
+		 Definimos todo lo relacionado con MQTT por si volvemos a usarlo en algún momento
 		# Creo el cliente
 		#self.client = self.mqtt.Client(Topico)
 		# Conecto al broker
@@ -404,16 +413,8 @@ class SonoffTH:
 		#self.client.subscribe([('stat/' + self.Topico + '/RESULT', 0), ('stat/' + self.Topico + '/STATUS10', 0)])
 		# Comenzamos el bucle
 		#self.client.loop_start()
-		# Pedimos Temperatura
-		if not Topico == 'bomba':
-			self.LeeTemperatura()
-		# Pedimos Estado
-		self.LeeEstado()
-		# Reducimos 2º por cada vez que se haya apretado el botón que lo obtenemos de Var1
-		if self.Var1 > 0:
-				Log('Reducimos la temperatura objetivo en base a las veces que se ha apretado el botón: ' + str(self.TMin) + '-' + str(self.Var1 * 2) + 'º', self.Debug)
-				self.TMin = self.TMin - (self.Var1 * 2)
-	
+		"""
+
 	def Controla(self, Modo, TMax = env.TEMPERATURA, Tiempo = 0, Debug = False):
 		""" Función encargada de controlar el SonOff de la placa a través de MQTT.
 		Si Controla: 0 Paramos la placa
@@ -422,10 +423,10 @@ class SonoffTH:
 					 4 Nueva función de control automático de manera más segura, usando backlog para asegurarse de que no se queda nada conectado
 		Partimos de una consigna mínima que fijamos en base a TMin y al mes en curso que hemos visto es suficiente para bañarnos
 		los 3. Lo modificamos dependiendo de las veces que se ha activado la bomba a través de una variable en la propia placa,
-		Mem1, que se reincia a 0 todos los días a las 4 AM por una Rule en la propia placa:
+		Var1, equivalente a la propiedad Bañados, que se reincia a 0 todos los días a las 4 AM por una Rule en la propia placa:
 		rule1 on time#Minute=240 do var1 0 endon
 		stat/placa/RESULT = {"Rule1":"ON","Once":"OFF","StopOnError":"OFF","Free":477,"Rules":"on time#Minute=240 do var1 0 endon"}
-		El valor de Mem1 lo modificamos directamente desde el botón cuando lo apretamos con el comando add1 1 que le suma 1 a la 
+		El valor de Var1 lo modificamos directamente desde el botón cuando lo apretamos con el comando 'add1 1' que le suma 1 a la 
 		variable 1. De esta manera no calentamos igual si ya se ha bañado una o 2 personas. Aplicamos un diferencial de 2º por 
 		cada uno
 		
@@ -454,8 +455,6 @@ class SonoffTH:
 				# Activamos el SonOff
 				#self.client.publish('cmnd/' + self.Topico + '/POWER', 'ON')
 				self.MandaCurl('Power On')
-				if self.Debug:
-					print(self.Topico + 'Power ON', 'Estado: ' + self.LeeEstado())
 				Log('Activamos la ' + self.Topico + ' manualmente', self.Debug)
 			else:
 				# Activamos el SonOff por un tiempo determinado. El tiempo nos viene en segundos pero el SonOff lo recibe en ms
@@ -466,8 +465,6 @@ class SonoffTH:
 				else:
 					tiempo2 = Tiempo * 10
 				self.MandaCurl('Backlog PulseTime1 ' + str(tiempo2) + ';Power1 On')
-				if self.Debug:
-					print(self.Topico + ' Backlog PulseTime1 ' + str(tiempo2) + ';Power1 On\nEstado: ' + self.LeeEstado())
 				Log('Activamos la ' + self.Topico + ' manualmente durante ' + str(Tiempo) + ' segundos', self.Debug)
 			return
 		if Modo == 4:
@@ -485,8 +482,6 @@ class SonoffTH:
 					grado = 418
 					Tiempo = temperatura * grado
 					Log('Activamos la ' + self.Topico + ' durante ' + str(Tiempo // 60) + ':' + '{:0>2d} '.format(Tiempo % 60) + 'partiendo de una temperatura de ' + str(self.Temperatura) + 'º para alcanzar los ' + str(self.TMin) + 'º', self.Debug)
-					if Debug:
-						print('cmnd/' + self.Topico + '/BACKLOG', 'PulseTime1 ' + str(Tiempo + 100) + ';POWER1 ON')
 					# Definimos el PulseTime y activamos la placa. El tiempo en el PulseTime en segundos hay que sumarle 100 
 					# ya que los 100 primeros se miden en décimas de segundo. Se tiene que usar un número PulseTimex que también
 					# se usará en el Powerx
@@ -500,23 +495,52 @@ class SonoffTH:
 						Log('La placa ya esta activa y quedan ' + str(self.Queda) + ' segundos', Debug)
 		return True
 
-	def LeeEstado(self):
-		""" Esta función obtiene el estado del SonOff para saber si está encendido o apagado
+	@property
+	def NoActivar(self):
+		""" Avanzamos un poco más en la OOP dentrop de Python usando estos 'decoradores' que nos permiten que una propiedad
+		de una clase se comporte realmente como una fución. De manera que obtenemos el valor cuando invocamos la propiedad.
+		En este caso, leemos el contenido de Mem1 que marcará si deshabilitamos el calentamiento porque ya nos hemos bañado todos
 		"""
-		# Debido a que algunas veces la bomba no responde a tiempo y produce un error, intentamos primero hacerle ping a ver si 'despierta'
-		cuantos = 0
-		while cuantos < 3:
-			if os.system('ping -c 2 ' + self.Topico) == 0:
-				cuantos = 3
-			else:
-				cuantos += 1
+		return int(eval(self.MandaCurl('mem1'))['Mem1'])
+	
+	@NoActivar.setter
+	def NoActivar(self, Valor):
+		""" Y también usamos el 'decorador' .setter para que cuando asignemos un valor a la propiedad se dispare una función.
+		En este caso, cuando modificamos el NoActivar disparamos el MandaCurl para modificar el Mem1
+		"""
+		self.MandaCurl('mem1 ' + str(Valor))
+
+	@property
+	def Bañados(self):
+		""" Leemos el contenido de Var1 para saber cuantas veces se ha activado la bomba hoy
+		"""
+		return int(eval(self.MandaCurl('var1'))['Var1'])
+	
+	@Bañados.setter
+	def Bañados(self, Valor):
+		""" Modificamos el valor de Bañados/Var1 en la placa
+		"""
+		self.MandaCurl('var1 ' + str(Valor))
+
+	@property
+	def Estado(self):
+		""" Esta función obtiene el estado del SonOff para saber si está encendido o apagado y otras variables relevantes
+		"""
 		# Leemos el estado de un status puesto que si mandamos un power se resetea el PulseTime y no se apaga la placa
-		self.Estado = eval(self.MandaCurl('status'))['Status']['Power']
-		# Leemos el contenido de Var1 para saber cuantas veces se ha activado la bomba hoy
-		self.Var1 = int(eval(self.MandaCurl('var1'))['Var1'][0])
-		# Leemos si queda tiempo pendiente del PulseTime1
-		self.Queda = eval(self.MandaCurl('PulseTime1'))['PulseTime1']['Remaining']
-		return self.Estado
+		
+		return eval(self.MandaCurl('status'))['Status']['Power']
+
+	@property
+	def Queda(self):
+		""" Leemos si queda tiempo pendiente del PulseTime1
+		"""
+		return eval(self.MandaCurl('PulseTime1'))['PulseTime1']['Remaining']
+
+	@property
+	def Temperatura(self):
+		""" Esta función obtiene la temperatura actual del sensor del SonOff.		
+		"""
+		return round(eval(self.MandaCurl('Status 10'))['StatusSNS']['DS18B20']['Temperature'])
 	
 	def SonOff_leo(self, client, userdata, message):
 		""" Esta función es llamada desde SonOff para hacer las lecturas y procesar los mensajes suscritos de SonOff
@@ -535,12 +559,6 @@ class SonoffTH:
 			self.Estado = self.mensaje['Status']["Power"]
 		return
 
-	def LeeTemperatura(self):
-		""" Esta función obtiene la temperatura actual del sensor del SonOff.		
-		"""
-		self.Temperatura = round(eval(self.MandaCurl('Status 10'))['StatusSNS']['DS18B20']['Temperature'])
-		return self.Temperatura
-
 	def MandaCurl(self, Comando):
 		#import pycurl
 		#from io import BytesIO
@@ -552,9 +570,10 @@ class SonoffTH:
 		#c.close()
 		#return buffer.getvalue().decode()
 		# Debido a los problemas para istalar el PyCurl en el Odroid lo hacemos a través de una llamada al sistema
-		Comando = Comando.replace(';','%3B')
-		respuesta = os.popen('curl -s "http://' + self.Topico + '/cm?cmnd=' + Comando.replace(' ','%20')+'"').read()
-		#Log('MandaCurl: ' + Comando, True)
+		Comando = Comando.replace(';','%3B').replace(' ','%20')
+		respuesta = os.popen('curl -s "http://' + self.Topico + '/cm?cmnd=' + Comando +'"').read()
+		if self.Debug:
+			print('MandaCurl: ' + Comando, True)
 		return respuesta
 		
 def BajaSeries(Batch = False, Debug = False):
@@ -2222,7 +2241,7 @@ def PasaaBD(Fichero = '/var/log/placa.log', Debug = False):
 		Log('Terminamos por hoy la importación de datos del log de la Placa a la BD con el ' + f[0:15] + '  y hemos importado ' + str(contador) + ' valores y comprimido el log')
 
 def Placa(Quehacemos = 4, Tiempo = 0, Debug = False):
-	""" Función encargada de controlar el SonOff de la placa a través de MQTT.
+	""" Función encargada de controlar el SonOff de la placa a través de MQTT/URL.
 	Si Quehacemos: 0 Paramos la placa
 				   1 Activamos la placa
 				   4 Estamos controlando la placa de manera automática (Las consignas de temperatura están establecidas por defecto en la clase)
@@ -2235,19 +2254,17 @@ def Placa(Quehacemos = 4, Tiempo = 0, Debug = False):
 	if Quehacemos == 0:
 		return MandaCurl('http://placa/cm?cmnd=Power%20Off')
 	if Quehacemos == 4:
-		# En caso de habernos bañado todos podemos crear un fichero en /tmp para que no se lance más. Comprobamos la existencia de dicho fichero
-		# y en caso de que exista salimos, pero antes comprobamos si es la última activación en la noche (21:45) o la última
-		# de la mañana. En ese caso, antes de salir, lo borramos
-		if os.path.exists('/tmp/TodosBañados'):
-			if (int(time.strftime('%H%M')) > 2144 or (int(time.strftime('%H%M')) > 755 and int(time.strftime('%H%M')) < 801)):
-				os.remove('/tmp/TodosBañados')
-				Log('Borramos TodosBañados')
-			Log('Ya se han bañado todos así que no activamos placa')
-			return
 		# Creamos la instancia de la placa
 		placa = SonoffTH('placa', Debug)
-		if (placa.Temperatura >= placa.TMin - (placa.Var1 * 2) and Quehacemos == 4):
-			Log('La temperatura del agua está a ' + str(placa.Temperatura) + 'º y la consigna es de ' + str(placa.TMin) + '-' + str(placa.Var1 * 2) + 'º, por lo que no activamos la placa', True)
+		# En caso de habernos bañado todos establecemos la variable Mem1/NoActivar en la placa a 1 y salimos, pero antes comprobamos si es la última activación en la noche (21:45) o la última de la mañana. En ese caso, restablecemos la variable
+		if placa.NoActivar:
+			Log('Ya se han bañado todos así que no activamos placa')
+			if (int(time.strftime('%H%M')) > 2144 or (int(time.strftime('%H%M')) > 755 and int(time.strftime('%H%M')) < 801)):
+				placa.NoActivar = 0
+				Log('Restablecemos NoActivar a 0')
+			return placa.Temperatura
+		if placa.Temperatura >= placa.TMin:
+			Log('La temperatura del agua está a ' + str(placa.Temperatura) + 'º y la consigna es de ' + str(placa.TMin) + 'º, por lo que no activamos la placa', True)
 	# Como ya está programado en la clase lo pasamos directamente
 	placa.Controla(Quehacemos, Tiempo = Tiempo, Debug = Debug)
 	del(placa)
