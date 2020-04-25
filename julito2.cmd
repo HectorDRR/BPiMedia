@@ -5,10 +5,10 @@ chcp 1252
 if defined debug set deb=rem
 rem Se encarga de crear la falsa carátula y Msheet para una serie de manera que Creaweb funcione correctamente y genere el enlace
 for /f "delims=*" %%g in ('dir \\metal\series /ad /b') do (
-	if not exist "e:\trabajo\scaratulas\%%g.jpg" (
-		echo >"e:\trabajo\scaratulas\%%g.jpg"
-		echo >"e:\trabajo\sMsheets\%%g_sheet.jpg"
-		echo Creada carátula y msheet para %%g
+if not exist "e:\trabajo\scaratulas\%%g.jpg" (
+	echo >"e:\trabajo\scaratulas\%%g.jpg"
+	echo >"e:\trabajo\sMsheets\%%g_sheet.jpg"
+	echo Creada carátula y msheet para %%g
 	)
 )
 rem Nos bajamos la información de los trailers y generamos los .nfo necesarios
@@ -34,16 +34,18 @@ dir /b /s /aa-h *.avi *.mkv >nul:
 if errorlevel 1 set /a nohay+=1
 echo %nohay%
 popd
-if %nohay%==3 goto fin
+if %nohay%==4 goto fin
 :sigue
 call :trailer
 rem Para que no genere las listas completas de películas. Tengo que estar atento a la etiqueta del disco porque cambia el nombre del fichero de pelis
 set no=1
 set nuevas=/aa-h
 call e:\winutil\funciones.py ListaPelis 1
-copy e:\winutil\HD_Ultimas %temp%\Anuncio
+move /y e:\winutil\HD_Ultimas e:\winutil\HD_Anuncio
 rem Hacemos una rutina especial para anunciar también las series, que no se están procesando correctamente
-for /d %%f in (*) do for /f "delims=*" %%g in ('dir /b /aa-h "%%f\*.avi" "%%f\*.mkv" "%%f\*.mp4"') do echo %%g:%%f:>>%temp%\Anuncio
+pushd z:\
+for /d %%f in (*) do for /f "delims=*" %%g in ('dir /b /aa-h "%%f\*.avi" "%%f\*.mkv" "%%f\*.mp4"') do echo %%g:%%f:>>e:\winutil\HD_Anuncio
+popd
 call e:\winutil\funciones.py CreaWeb Anuncio 1
 :lista
 set no=1
@@ -57,7 +59,7 @@ for %%f in (Todas,Pelis,Cortos,Infantiles) do (
 	call e:\winutil\funciones.py CreaWeb %%f
 	if not %%f==Todas (
 		pushd p:\%%f
-		move /y index.html j:\temp\index_%%f_old.html
+		move /y index.html %tmp%\index_%%f_old.html
 		move "p:\pelis\%%f.html" index.html
 		attrib -a index.html
 		popd
@@ -74,6 +76,7 @@ pause
 for %%f in (p:\pelis,z:\,p:\cortos,p:\infantiles) do (
 	cd /d %%f
 	%deb% attrib -a * /D /S
+)
 :fin
 set deb=
 popd
@@ -99,11 +102,13 @@ for %%g in (p:\pelis,p:\cortos,p:\Infantiles) do (
 		rem Lo siguiente mantiene el mismo valor de la iteraciónanterior si el fichero tr.txt está vacío
 		set /p tr=<%tmp%\tr.txt
 		if not "!tr:~0,1!"=="N" (
-			echo ^<movie^>^<trailer^>!tr:~1,-1!^</trailer^>^</movie^>>"%tmp%\NFO"
+			echo ^<movie^>^<trailer^>!tr!^</trailer^>^</movie^>>"%tmp%\NFO"
 			echo !tr:~1,-1!
 			if exist "e:\trabajo\msheets\%%f.tgmd" del "e:\trabajo\msheets\%%f.tgmd"
 			"c:\Program Files\7-Zip\7z.exe" a -tzip "e:\trabajo\msheets\%%f.tgmd" "%tmp%\NFO"
-			del "%tmp%\NFO"	
+			rem Creamos también el .nfo para usarlo en vez del .tgmd y asi no tener que estar descomprimiendo
+			copy "%tmp%\NFO" "e:\trabajo\Msheets\%%~nf.nfo"
+			del "%tmp%\NFO"
 		)
 		del %tmp%\tr.txt
 	)
