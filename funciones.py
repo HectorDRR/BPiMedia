@@ -494,13 +494,12 @@ class SonoffTH:
 					# ya que los 100 primeros se miden en décimas de segundo. Se tiene que usar un número PulseTimex que también
 					# se usará en el Powerx
 					self.MandaCurl('BACKLOG PulseTime1 ' + str(Tiempo + 100) + ';POWER1 ON')
+				# Comprobamos el tiempo del PulseTime que queda pendiente
+				elif self.Queda == 0:
+					Log('Ha habido algún problema puesto que el remaining está a 0 pero la placa está encendida. Apagamos', Debug)
+					self.Controla(0)
 				else:
-					# Comprobamos el tiempo del PulseTime que queda pendiente
-					if self.Queda == 0:
-						Log('Ha habido algún problema puesto que el remaining está a 0 pero la placa está encendida. Apagamos', Debug)
-						self.Controla(0)
-					else:
-						Log('La placa ya esta activa y quedan ' + str(self.Queda) + ' segundos', Debug)
+					Log('La placa ya esta activa y quedan ' + str(self.Queda) + ' segundos', Debug)
 		return True
 
 	@property
@@ -740,57 +739,11 @@ def Bomba(Debug = False):
 		placa.Controla(1, Tiempo = 360)
 	return
 
-def BombaConSensor(Debug = False):
-	""" Desde aquí controlamos el funcionamiento de la bomba cuando tenemos sensor de temperatura. Como ahora no tenemos, simplificamos el proceso.
-	"""
-	import subprocess
-	
-	if type(Debug)==str:
-		Debug = eval(Debug)
-	# Diferencial de temperatura a alcanzar
-	delta = 2
-	# Creamos las instancias
-	bomba = SonoffTH('bomba', Debug)
-	# Si la temperatura actual es mayor de 25º es que ya ha estado en funcionamiento, así que salimos
-	if bomba.Temperatura > 25:
-		Log('La temperatura de la bomba es de ' + str(bomba.Temperatura) + 'º, así que no la activamos', Debug)
-		return
-	placa = SonoffTH('placa', Debug)
-	# Pasamos el valor a una variable para poder finalizar el objeto
-	tplaca = placa.Temperatura
-	# Si el agua no está caliente, activamos la placa
-	if (tplaca < placa.TMin and int(time.strftime('%H')) < 23 and int(time.strftime('%H')) > 6):
-		# Temporalmente, creamos un subproceso para el tema de calentar el agua de la placa sin esperar para poder lanzar la bomba, que es lo que nos interesa. Y lo lanzamos el subproceso redirigiendo la salida y los errores a la misma variable
-		sub = subprocess.Popen(['python3','/home/hector/bin/funciones.py Placa 4'],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-	# Objetivo a alcanzar. En principio, 2 grados más que la actual
-	temperatura = bomba.Temperatura + delta
-	# Aplicamos el nuevo control automático embebido en la clase
-	#bomba.Controla (4, TMax = 35)
-	# Lo dejamos inutilizado hasta confirmar que el control embebido está funcionando correctamente
-	# Volvemos a activarlo para hacer pruebas de calibración.
-	while (bomba.Estado == 0 and bomba.Temperatura < temperatura):
-		# Vamos comprobando la temperatura cada 10 segundos para un total de x segundos y después esperamos
-		for f in range(0, 6):
-			# Activamos la bomba durante x segundos y esperamos 60 más para que llegue el calor al sensor
-			bomba.Controla(1, temperatura, 0, 10)
-			time.sleep(10)
-			if bomba.LeeTemperatura() >= temperatura:
-				break
-		# Después de haber activado la bomba durante x segundos en tramos de 10, esperamos a ver si la temperatura sube
-		for g in range(0, 6):
-			time.sleep(10)
-			if bomba.LeeTemperatura() >= temperatura:
-				break			
-	Log('Despues de ' + str(f*10 + g*10) + ' segundos la temperatura es de ' + str(bomba.Temperatura) + 'º y al comenzar era de ' + str(temperatura -delta) + 'º', True)
-	time.sleep(150)
-	Log('Después de 150 segundos más la temperatura es de ' + str(bomba.LeeTemperatura()) + 'º')
-	return
-
 def Borra(Liberar = 50, Dias = 20, Auto = 0):
 	"""Se encarga de liberar espacio eliminando los ficheros más viejos que hay en las series sin
-	contar los que están en las series que vemos (env.SERIESVER) Por defecto, liberará 20 GB.
+	contar los que están en las series que vemos (env.SERIESVER) Por defecto, liberará 'Liberar' GB.
 	Añadimos un parámetro Auto para poder lanzarlo de manera automática desde Discolleno cuando 
-	el emule detecta que no hay espacio, de manera que no pregunta nada.
+	el amule detecta que no hay espacio, de manera que no pregunta nada.
 	"""
 	Log('Vamos a proceder a eliminar ficheros viejos de pasados')
 	# Sacamos la lista de ficheros con mas de 30 días de antiguedad y que los permisos 
@@ -828,7 +781,7 @@ def Borra(Liberar = 50, Dias = 20, Auto = 0):
 	# Eliminamos las carpetas sin serie
 	if Auto == 0:
 		LimpiaPasados()
-	return
+	return libre
 
 def Borra2(borrar, Liberar, Preg=False):
 	""" Se encarga de borrar la lista de ficheros que le pasamos hasta dejar libre el espacio
@@ -1315,24 +1268,20 @@ def CreaWebO(Titulo = 'Ultimas', Filtro = '', Modo = False, Debug = False):
 			file.writelines(f)
 
 def Discolleno():
-	"""Es lanzada cuando el emule detecta que queda 1 GB o menos libre.
+	"""Es lanzada cuando el emule detecta que queda 5 GB o menos libre.
 	Se encargará de hacer una primera limpieza, y en caso de que no sea suficiente, mandar un mensaje avisando del problema
 	"""
 	#Si ya hemos mandado el mensaje e intentado limpiar en esta hora, ignoramos el proceso, puesto que el emule lo lanza cada minuto
 	hora = time.strftime('%Y%m%d%H')
-	if os.path.exists('/tmp/' + hora):
-		return
-	else:
-		#Si hemos creado un fichero la hora antes, lo eliminamos
+	if not os.path.exists('/tmp/' + hora):
+		#Si hemos creado un fichero la hora antes, lo renombramos a la hora actual
 		if os.path.exists('/tmp/' + str(int(hora) -1 )):
-			os.remove('/tmp/' + str(int(hora) -1 ))
-	#Primero lanzamos la función de borrar de manera automática que debería de dejar 20 GB libres
-	Borra(Auto = 1)
-	libre = Libre('/mnt/e/')
-	if libre > 5:
-		return
-	#Si no hemos alcanzado los 5 GB y no lo hemos hecho ya, mandamos un correo
-	os.system('df -h /mnt/e | mutt -s "Disco de la PiMulita sin espacio" -c Hector.D.Rguez@gmail.com &>>/tmp/' + hora)
+			os.rename('/tmp/' + str(int(hora) -1 ), '/tmp/' + hora)
+		else:
+			#Primero lanzamos la función de borrar de manera automática que debería de dejar 20 GB libres
+			if Borra(Auto = 1) < 10:
+				#Si no hemos alcanzado los 10 GB mandamos un correo
+				os.system('df -h /mnt/e | mutt -s "Disco de la PiMulita sin espacio" -c Hector.D.Rguez@gmail.com &>>/tmp/' + hora)
 	return
 
 def Divide(Serie):
