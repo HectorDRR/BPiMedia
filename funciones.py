@@ -399,7 +399,7 @@ class SonoffTH:
 				# A partir de Marzo, empezamos de nuevo a disminuir el diferencial, de manera que en Agsto será 0
 				mes = 8 - mes
 		# Pasamos a obtener la temperatura de consigna base de la propia memoria de la placa (Mem2) y le sumamos el diferencial
-		self.TMin =  + mes
+		self.TMin = self.Mem2 + mes
 		# Reducimos 2º por cada vez que se haya apretado el botón que lo obtenemos de la placa (Var1)
 		if self.Bañados > 0:
 				Log('Reducimos la consigna en base a las veces que se ha apretado el botón: ' + str(self.TMin) + '-' + str(self.Bañados * 2) + 'º', self.Debug)
@@ -548,7 +548,7 @@ class SonoffTH:
 		return round(eval(self.MandaCurl('Status 10'))['StatusSNS']['DS18B20']['Temperature'])
 	
 	@property
-	def TMin(self):
+	def Mem2(self):
 		""" Obtiene la tempertura de consigna mínima de la placa o el tiempo de funcionamiento de la bomba
 		"""
 		return int(eval(self.MandaCurl('mem2'))['Mem2'])
