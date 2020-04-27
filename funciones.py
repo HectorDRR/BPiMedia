@@ -384,23 +384,23 @@ class SonoffTH:
 		self.Topico = Topico
 		# Si en algún momento volvemos a usar el MQTT
 		#InitMQTT(self)
-		# Definimos como constante, importándola de env.TEMPERATURA, la temperatura mínima del agua hasta que encontremos la manera de hacer 
-		# un cálculo aproximado de manera automática. Hemos visto que en invierno necesitamos un mínimo de 40º mientras que en
-		# verano, con el agua de base más caliente, 35 grados es suficiente. Tenemos que buscar como establecer una curva
-		# Partimos de que en Octubre tenemos que subir la temperatura del agua y lo hacemos de grado en grado partiendo de TMin
+		# Aplicamos un algoritmo considerando Febrero, el mes más frío y Agosto el más cálido, basándonos en las estadísticas de
+		# la AEMET para 2019
+		# Obtenemos el número del mes actual
 		mes = time.localtime().tm_mon
-		# A partir de Octubre sencillamente le restamos los 9 meses anteriores y tenemos 1 grado por cada mes hasta Diciembre
-		if mes > 9:
-			mes = mes - 9
-		# A partir de Enero y hasta Marzo, aumentamos los 3º anteriores + 1
+		# A partir de Agosto, sencillamente le restamos los 8 meses anteriores y tenemos 1 grado por cada mes hasta Diciembre
+		if mes > 8:
+			mes = mes - 8
+		# A partir de Enero y hasta Febrero, seguimos aumentando la temperatura
 		else:
-			if mes < 5 :
-				mes = 2 + mes
+			if mes < 3 :
+				mes = 12 + mes - 8
 			else:
-				mes = 0
-		# Y por ahora, asumimos que Mayo va a estar calentito y que vamos a mantener la consigna mínima de 35º de Abril a Septiembre
-		self.TMin = env.TEMPERATURA + mes
-		# Reducimos 2º por cada vez que se haya apretado el botón que lo obtenemos de Var1
+				# A partir de Marzo, empezamos de nuevo a disminuir el diferencial, de manera que en Agsto será 0
+				mes = 8 - mes
+		# Pasamos a obtener la temperatura de consigna base de la propia memoria de la placa (Mem2) y le sumamos el diferencial
+		self.TMin =  + mes
+		# Reducimos 2º por cada vez que se haya apretado el botón que lo obtenemos de la placa (Var1)
 		if self.Bañados > 0:
 				Log('Reducimos la consigna en base a las veces que se ha apretado el botón: ' + str(self.TMin) + '-' + str(self.Bañados * 2) + 'º', self.Debug)
 				self.TMin = self.TMin - (self.Bañados * 2)
@@ -423,7 +423,7 @@ class SonoffTH:
 		#self.client.loop_start()
 		"""
 
-	def Controla(self, Modo, TMax = env.TEMPERATURA, Tiempo = 0, Debug = False):
+	def Controla(self, Modo, Tiempo = 0, Debug = False):
 		""" Función encargada de controlar el SonOff de la placa a través de MQTT.
 		Si Controla: 0 Paramos la placa
 					 1 Activamos manualmente con opción de tiempo para desonexión automática
@@ -438,7 +438,6 @@ class SonoffTH:
 		variable 1. De esta manera no calentamos igual si ya se ha bañado una o 2 personas. Aplicamos un diferencial de 2º por 
 		cada uno
 		
-		TMax: Temperatura máxima a alcanzar cuando el control es automático
 		TMin: Temperatura mínima para proceder con el control automático
 		Tiempo: En segundos que queremos mantener la placa funcionando
 		
@@ -452,7 +451,6 @@ class SonoffTH:
 		"""
 		# En caso de pasarlo desde línea de comando como string, lo pasamos a int. Si ya viene como int no pasa nada
 		Modo = int(Modo)
-		TMax = int(TMax)
 		Teimpo = int(Tiempo)
 		if (Modo == 0 and self.Estado == 1):
 			self.MandaCurl('Power Off')
@@ -549,6 +547,12 @@ class SonoffTH:
 		"""
 		return round(eval(self.MandaCurl('Status 10'))['StatusSNS']['DS18B20']['Temperature'])
 	
+	@property
+	def TMin(self):
+		""" Obtiene la tempertura de consigna mínima de la placa o el tiempo de funcionamiento de la bomba
+		"""
+		return int(eval(self.MandaCurl('mem2'))['Mem2'])
+
 	def SonOff_leo(self, client, userdata, message):
 		""" Esta función es llamada desde SonOff para hacer las lecturas y procesar los mensajes suscritos de SonOff
 		"""
@@ -718,6 +722,7 @@ def BajaSeries(Batch = False, Debug = False):
 
 def Bomba(Debug = False):
 	""" Desde aquí controlamos el funcionamiento de la bomba con el Basic sin sensor
+		*** Actualmente en desuso puesto que lo controlamos directamente con los M5Stick C ***
 	"""
 	
 	if type(Debug)==str:
@@ -728,11 +733,11 @@ def Bomba(Debug = False):
 	if bomba.Estado == 1:
 		Log('La bomba está conectada, así que no la activamos', Debug)
 		return
-	# Activamos la bomba durante env.TBOMBA segundos
-	bomba.Controla(1, Tiempo = env.TBOMBA)
-	time.sleep(env.TBOMBA + 1)
+	# Activamos la bomba durante bomba.TMin segundos
+	bomba.Controla(1, Tiempo = bomba.TMin)
+	time.sleep(bomba.TMin + 1)
 	if Debug:
-		Log('El estado de la bomba después de' + str(env.TBOMBA) + ' segundos es ' + bomba.LeeEstado())
+		Log('El estado de la bomba después de' + str(bomba.TMin) + ' segundos es ' + bomba.Estado)
 	placa = SonoffTH('placa', Debug)
 	# Si el agua no está caliente, y no es de las 23 a las 6 horas, activamos la placa durante 6 minutos
 	if (placa.Temperatura < placa.TMin and int(time.strftime('%H')) < 23 and int(time.strftime('%H')) > 5):
