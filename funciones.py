@@ -2244,7 +2244,7 @@ def Placa(Quehacemos = 4, Tiempo = 0, Debug = False):
 		# Creamos la instancia de la placa
 		placa = SonoffTH('placa', Debug)
 		# En caso de habernos bañado todos establecemos la variable Mem1/NoActivar en la placa a 1 y salimos, pero antes comprobamos si es la última activación en la noche (21:45) o la última de la mañana. En ese caso, restablecemos la variable
-		if placa.NoActivar:
+		if placa.NoActivar or placa.Bañados > 2:
 			Log('Ya se han bañado todos así que no activamos placa')
 			if (int(time.strftime('%H%M')) > 2144 or (int(time.strftime('%H%M')) > 755 and int(time.strftime('%H%M')) < 801)):
 				placa.NoActivar = 0
