@@ -1356,6 +1356,50 @@ def FAApi(Serie, Mini = 0):
 		print(lista)
 	return pagina, imagen
 
+def Generacion(Fichero = '/tmp/Canarias.json', Debug = False):
+	""" Función para graficar la generación de electricidad en Canarias de la última semana según tecnologías.
+		Nos basaremos en la librería dygraph, igual que hacemos con la de temperatura de la placa de ACS.
+		Los datos los obtenemos en formato JSON desde la web de REE que tiene una API Rest para ello a la que llamamos 
+		con los siguientes parámetros:
+		https://apidatos.ree.es/es/datos/generacion/estructura-renovables?start_date=2020-04-01T00:00&end_date=2020-04-27T23:59&geo_trunc=electric_system&geo_limit=canarias&geo_ids=8742&time_trunc=day
+	"""
+	import json, datetime
+	# Obtenemos la fecha de ayer y la de hace 30 días
+	fechafin = datetime.datetime.now() - datetime.timedelta(days = 1)
+	fechaini = fechafin - datetime.timedelta(days = 30)
+	# Obtenemos los datos de la web para los últimos 30 días
+	MandaCurl("-o /tmp/Canarias.json 'https://apidatos.ree.es/es/datos/generacion/estructura-generacion?start_date=" + 
+		fechaini.strftime('%Y-%m-%d') + "T00:00&end_date=" + fechafin.strftime('%Y-%m-%d') + "T23:59&geo_trunc=electric_system&geo_limit=canarias&geo_ids=8742&time_trunc=day'")
+	if Debug:
+		print("https://apidatos.ree.es/es/datos/generacion/estructura-generacion?start_date=" + fechaini.strftime('%Y-%m-%d') +
+		"T00:00&end_date=" + fechafin.strftime('%Y-%m-%d') +
+		"T23:59&geo_trunc=electric_system&geo_limit=canarias&geo_ids=8742&time_trunc=day")
+	# Leemos los datos
+	datos = json.load(open(Fichero))
+	# Ahora tenemos que quedarnos con los datos que nos interesan de toda la estructura para hacer un CSV manejable por Dygraph
+	# Empezamos creando la cabecera. En vez de cogerla de los datos, la ponemos manualmente para acortar los nombres
+	csv = ['fecha,Hidráulica,Diésel,Gas,Vapor,Ciclo Combinado,Hidroeólica,Eólica,Fotovoltaica,Otras Renovables']
+	# Hacemos el bucle para obtener los datos de los 30 días
+	for f in range(0,30):
+		# Primero la cabecera en formato fecha, tecnología1, tecnología2, tecnologíax
+		#csv[0] = csv[0] + ',' + datos['included'][f]['attributes']['title']
+		# Ahora cogemos la fecha
+		linea = datos['included'][2]['attributes']['values'][f]['datetime'][0:10]
+		# Son 9 tecnologías de generación
+		for g in range(0,9):
+			# Añadimos los valores porcentuales. Ponemos un try porque vimos que hay veces que algunas tecnologías no 
+			# tenían datos y daba un error, así que en ese caso lo ponemos a 0
+			try:
+				linea = linea + ',' + str(round(datos['included'][g]['attributes']['values'][f]['percentage'] * 100))
+			except:
+				linea = linea + ',0'
+		# Añadimos la línea al listado
+		csv.append(linea)
+	# Ahora, para acabar, escribimos el fichero completo del que se alimenta el gráfico
+	with open(env.WEB + 'Generacion.csv', 'w') as file:
+		for f in csv:
+			file.writelines(f + '\n')
+	
 def GeneraLista(Listado, Pelis, Serie = False, Debug = False):
 	""" Pequeña función para generar la lista de películas o series con sus comentarios si los hubiera.
 	La separamos de la función principal para poder llamarla cuando realizamos la lista de últimas
