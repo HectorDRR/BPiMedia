@@ -2492,7 +2492,7 @@ def SubCanciones(p1):
 	lista.save(p1[:-3] + 'for.srt', encoding='iso-8859-1')
 	return
 
-def Temperatura(Cada = 1, Cual = 'Temperatura'):
+def Temperatura(Cual = 'Temperatura'):
 	""" Se encarga de crear una gráfica con la temperatura del agua en la placa solar de la última semana y un fichero de texto
 		con el tiempo que ha estado la placa activa en el mes en curso.
 	"""
@@ -2505,17 +2505,24 @@ def Temperatura(Cada = 1, Cual = 'Temperatura'):
 	# Obtenemos la fecha de ayer para sacar los de las últimas 24 horas
 	fecha = datetime.datetime.now()
 	# Obtenemos cuantos minutos ha estado encedida la placa este mes
-	activo = list(cursor.execute("select count(Encendido)*5 from placa where encendido=1 and fecha like '" + fecha.strftime('%Y-%m-%%') + "'"))[0][0]
+	activa = list(cursor.execute("select count(Encendido)*5 from placa where encendido=1 and fecha like '" + fecha.strftime('%Y-%m-%%') + "'"))[0][0]
 	# Lo pasamos a horas y minutos
-	activo = f'{activo // 60:02}:{activo % 60:02}'
-	with open(env.WEB + 'Activo.txt', 'w') as file:
-		file.writelines(activo)
+	activa = f'{activa // 60:02}:{activa % 60:02}'
+	# Obtenemos la mínima del mes
+	minima = list(cursor.execute("select Min(Temperatura) from placa where fecha > '" + fecha.strftime('%Y-%m-00') + "'"))[0][0]
+	# Obtenemos la media del mes
+	maxima = list(cursor.execute("select Max(Temperatura) from placa where fecha > '" + fecha.strftime('%Y-%m-00') + "'"))[0][0]
+	# Obtenemos la máxima del mes
+	media = list(cursor.execute("select round(Avg(Temperatura)) from placa where fecha > '" + fecha.strftime('%Y-%m-00') + "'"))[0][0]
 	# Retrocedemos una semana
 	fecha = fecha - datetime.timedelta(days = 7)
 	# Añadimos el .fetchall() para pasar los datos como una lista y no seguir usando el cursor
 	datos = cursor.execute("Select * From placa Where Fecha > '" + fecha.strftime('%Y-%m-%d %H:%M') + "'").fetchall()
 	# Cerramos la base de datos
 	bd.close()
+	# Escribimos los valores en formato JSON para pasárselos a la página web
+	with open(env.WEB + 'Activo.txt', 'w') as file:
+		file.writelines('{"Activa":"' + str(activa) + '","Minima":' + str(minima) + ',"Media":' + str(media) + ',"Maxima":' + str(maxima) + '}')
 	with open(env.WEB + Cual + '.csv', 'w') as file:
 		# Escribo cabeceras
 		file.writelines('Hora,Temperatura,Activo\n')
