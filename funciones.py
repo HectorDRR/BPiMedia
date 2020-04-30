@@ -2505,15 +2505,11 @@ def Temperatura(Cual = 'Temperatura'):
 	# Obtenemos la fecha de ayer para sacar los de las últimas 24 horas
 	fecha = datetime.datetime.now()
 	# Obtenemos cuantos minutos ha estado encedida la placa este mes
-	activa = list(cursor.execute("select count(Encendido)*5 from placa where encendido=1 and fecha like '" + fecha.strftime('%Y-%m-%%') + "'"))[0][0]
+	activa = list(cursor.execute("select count(Encendido)*5 from placa where encendido=1 and fecha > '" + fecha.strftime('%Y-%m-00') + "'"))[0][0]
 	# Lo pasamos a horas y minutos
 	activa = f'{activa // 60:02}:{activa % 60:02}'
-	# Obtenemos la mínima del mes
-	minima = list(cursor.execute("select Min(Temperatura) from placa where fecha > '" + fecha.strftime('%Y-%m-00') + "'"))[0][0]
-	# Obtenemos la media del mes
-	maxima = list(cursor.execute("select Max(Temperatura) from placa where fecha > '" + fecha.strftime('%Y-%m-00') + "'"))[0][0]
-	# Obtenemos la máxima del mes
-	media = list(cursor.execute("select round(Avg(Temperatura)) from placa where fecha > '" + fecha.strftime('%Y-%m-00') + "'"))[0][0]
+	# Obtenemos la mínima, media y máxima del mes en curso
+	medias = list(cursor.execute("select Min(Temperatura), round(Avg(Temperatura)), Max(Temperatura) from placa where fecha > '" + fecha.strftime('%Y-%m-00') + "' and fecha like '%%18:3%%'"))[0]
 	# Retrocedemos una semana
 	fecha = fecha - datetime.timedelta(days = 7)
 	# Añadimos el .fetchall() para pasar los datos como una lista y no seguir usando el cursor
@@ -2522,7 +2518,7 @@ def Temperatura(Cual = 'Temperatura'):
 	bd.close()
 	# Escribimos los valores en formato JSON para pasárselos a la página web
 	with open(env.WEB + 'Activo.txt', 'w') as file:
-		file.writelines('{"Activa":"' + str(activa) + '","Minima":' + str(minima) + ',"Media":' + str(media) + ',"Maxima":' + str(maxima) + '}')
+		file.writelines('{"Activa":"' + str(activa) + '","Minima":' + str(medias[0]) + ',"Media":' + str(medias[1]) + ',"Maxima":' + str(medias[2]) + '}')
 	with open(env.WEB + Cual + '.csv', 'w') as file:
 		# Escribo cabeceras
 		file.writelines('Hora,Temperatura,Activo\n')
