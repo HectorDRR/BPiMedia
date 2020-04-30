@@ -2499,6 +2499,8 @@ def Temperatura(Cual = 'Temperatura'):
 	import sqlite3, datetime
 	# Importamos los últimos datos a la BD
 	PasaaBD()
+	# Lanzamos la consulta de los parámetros del sistema FV y de la placa de ACS para que se actualice el fichero /mnt/f/Placas.txt del que se nutre la página web inicial. Más adelante lo portaremos todo a Python
+	os.system('/home/hector/bin/venus.sh')
 	# Cargamos los datos excluyendo los de la Bomba, por ahora
 	bd = sqlite3.connect('/mnt/e/.mini/placa.db')
 	cursor = bd.cursor()
