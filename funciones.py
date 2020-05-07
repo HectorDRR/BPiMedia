@@ -264,9 +264,9 @@ class Pelicula:
 					os.chdir(donde)
 		else:
 			# Si no está en el título, lo sacamos del .nfo o el .tgmd
-			self.Año = int(self.SacaInfo('year'))
+			self.Año = self.SacaInfo('year')
 		# Si SacaInfo ha dado un error
-		if self.Año < 10:
+		if self.Año == '':
 			self.Año = 0
 		return self.Año
 
@@ -585,6 +585,51 @@ class SonoffTH:
 		respuesta = os.popen('curl -s "http://' + self.Topico + '/cm?cmnd=' + Comando +'"').read()
 		if self.Debug:
 			print('MandaCurl: ' + Comando, True)
+		return respuesta
+
+class Victron:
+	""" Para interactuar con el API REST de Victron y obtener información almacenada en su BD en vez de atacar por MQTT
+	directamente al Venus GX
+	"""
+	def __init__(self, Debug = False):
+		""" Inicializamos la clase con el token y los valores de acceso a la API
+		"""
+		import claves
+		self.Debug = Debug
+		# Token de seguridad para autentificarme llamado internamente ParaWeb
+		self.Token = claves.VictronToken
+		# Añadimos un espacio al principio para no hacerlo en el MandaCurl y que quede más limpio
+		self.URLUser = 'users/' + claves.VictronUser
+		self.URLInstalacion = 'installations/' + claves.VictronInstalacion
+		# Obtenemos lo generado y consumido
+		self.Totales = self.MandaCurl(self.URLInstalacion + 'overallstats?type=custom&attributeCodes[]=total_solar_yield&attributeCodes[]=total_consumption')
+		# Iniciamos el diccionario
+		self.Estadistica = {}
+		# Extraemos lo generado y consumido para cada periodo
+		for f in (self.Totales['records']):
+			self.Estadistica[f[0].upper() + 'gen'] = round(self.Totales['records'][f]['totals']['total_solar_yield'], 2)
+			self.Estadistica[f[0].upper() + 'con'] = round(self.Totales['records'][f]['totals']['total_consumption'], 2)
+		if Debug:
+			print(self.Totales, self.Estadistica)
+
+	def MandaCurl(self, Comando, Metodo = 'GET'):
+		""" Usamos el Curl para obtener información de la API
+		"""
+		import json
+		#import pycurl
+		#from io import BytesIO
+		#buffer = BytesIO()
+		#c = pycurl.Curl()
+		#c.setopt(c.URL, 'http://' + self.Topico + '/cm?cmnd=' + Comando.replace(' ','%20'))
+		#c.setopt(c.WRITEDATA, buffer)
+		#c.perform()
+		#c.close()
+		#return buffer.getvalue().decode()
+		# Debido a los problemas para istalar el PyCurl en el Odroid lo hacemos a través de una llamada al sistema
+		#Comando = Comando.replace(';','%3B').replace(' ','%20')
+		respuesta = json.loads(os.popen('curl -s -H "' + self.Token + '" -X ' + Metodo + ' "https://vrmapi.victronenergy.com/v2/' + Comando + '"').read())
+		if self.Debug:
+			print('MandaCurl: ' + Comando)
 		return respuesta
 		
 def BajaSeries(Batch = False, Debug = False):
@@ -1378,15 +1423,17 @@ def Generacion(Fichero = '/tmp/Canarias.json', Debug = False):
 	datos = json.load(open(Fichero))
 	# Ahora tenemos que quedarnos con los datos que nos interesan de toda la estructura para hacer un CSV manejable por Dygraph
 	# Empezamos creando la cabecera. En vez de cogerla de los datos, la ponemos manualmente para acortar los nombres
-	csv = ['fecha,Hidráulica,Diésel,Gas,Vapor,Ciclo Combinado,Hidroeólica,Eólica,Fotovoltaica,Otras Renovables']
+	#csv = ['fecha,Hidráulica,Diésel,Gas,Vapor,Ciclo Combinado,Hidroeólica,Eólica,Fotovoltaica,Otras Renovables']
+	csv = ['Fecha']
+	# Primero la cabecera en formato fecha, tecnología1, tecnología2, tecnologíax
+	for g in range(0,len(datos['included'])):
+		csv[0] = csv[0] + ',' + datos['included'][g]['attributes']['title']
 	# Hacemos el bucle para obtener los datos de los 30 días
 	for f in range(0,30):
-		# Primero la cabecera en formato fecha, tecnología1, tecnología2, tecnologíax
-		#csv[0] = csv[0] + ',' + datos['included'][f]['attributes']['title']
 		# Ahora cogemos la fecha
 		linea = datos['included'][2]['attributes']['values'][f]['datetime'][0:10]
-		# Son 9 tecnologías de generación
-		for g in range(0,9):
+		# Son las tecnologías de generación
+		for g in range(0,len(datos['included'])):
 			# Añadimos los valores porcentuales. Ponemos un try porque vimos que hay veces que algunas tecnologías no 
 			# tenían datos y daba un error, así que en ese caso lo ponemos a 0
 			try:
@@ -2267,7 +2314,7 @@ def PasaaBD(Fichero = '/var/log/placa.log', Debug = False):
 	if not esotro:
 		os.system('cat ' + Fichero + ' >> placa_' + time.strftime('%Y%m%d') + '.log && rm ' + Fichero)
 	# Si es el último de la noche, lo movemos al zip de los logs 
-	if time.strftime('%H%M') == '2330':
+	if time.strftime('%H%M') == '2345':
 		os.system('zip -m logs.zip placa_' + time.strftime('%Y%m%d') + '.log')
 		Log('Terminamos por hoy la importación de datos del log de la Placa a la BD con el ' + f[0:15] + '  y hemos importado ' + str(contador) + ' valores y comprimido el log')
 
@@ -2308,6 +2355,8 @@ def Prueba(Param, Debug = False):
 	if Debug:
 		print(Debug)
 	#print(pp.Temp, pp.Estado)
+	pp = Victron()
+	print(pp.Generado, pp.Consumido)
 	return
 
 def Queda(Fichero, Destino, FTP = False):
@@ -2496,11 +2545,15 @@ def Temperatura(Cual = 'Temperatura'):
 	""" Se encarga de crear una gráfica con la temperatura del agua en la placa solar de la última semana y un fichero de texto
 		con el tiempo que ha estado la placa activa en el mes en curso.
 	"""
-	import sqlite3, datetime
+	import sqlite3, datetime, json, claves
+	# Obtenemos los valores totales de hoy del sistema fotovoltaico
+	fv = Victron()
+	with open('/tmp/fvhoy', 'w') as file:
+		file.writelines(json.dumps(fv.Estadistica))
+	# Lanzamos la consulta de los parámetros del sistema FV y de la placa de ACS para que se actualice el fichero /mnt/f/Placas.txt del que se nutre la página web inicial. Más adelante lo portaremos todo a Python
+	os.system('/home/hector/bin/venus.sh ' + claves.VictronInterna)
 	# Importamos los últimos datos a la BD
 	PasaaBD()
-	# Lanzamos la consulta de los parámetros del sistema FV y de la placa de ACS para que se actualice el fichero /mnt/f/Placas.txt del que se nutre la página web inicial. Más adelante lo portaremos todo a Python
-	os.system('/home/hector/bin/venus.sh')
 	# Cargamos los datos excluyendo los de la Bomba, por ahora
 	bd = sqlite3.connect('/mnt/e/.mini/placa.db')
 	cursor = bd.cursor()

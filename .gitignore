@@ -1,1 +1,6 @@
-venus.sh
+claves.py
+baja.sh
+mqtt_sub-inverter
+sube.sh
+reset-router
+__pycache__/*

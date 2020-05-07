@@ -1,20 +1,51 @@
+#!/bin/bash
+function procesos {
+	# Comprueba la existencia de los procesos normales del sistema
+	for f in amuled transmiss minidlna smb vsftpd noip2 python3; do
+        	pgrep -a $f
+        	if [ $? -eq 1 ]
+                	then
+                	echo Existe un problema con el proceso $f
+                	read p
+        	fi
+	done
+}
 function Series {
+	# Lista las series pendientes de pasar a disco
 	find /mnt/e/pasados/ -type f -perm -u+rwx -exec du -ch '{}' +|sort -k 2|more
+}
+function json {
+	# Extrae de una cadena JSON tipo {"item": valor} el valor
+	echo ${1:`expr index "$1" :`:-1}
 }
 uptime
 free -h
-echo Temperatura: `cat /sys/class/thermal/thermal_zone0/temp`
+tem=$(cat /sys/class/thermal/thermal_zone0/temp)
+echo Temperatura del Odroid: ${tem:0:2}º
 if [ $1p == sp ];
 	then Series;
 	exit;
 fi
 # ~/bin/venus.sh Como lo estamos ejecutando cada 15 minutos, no vale la pena hacerlo cada vez que ejecutemos el st
-echo Temperatura del agua: `tail /var/log/placa.log |grep Temperature|tail -1 |cut -c 132-135`
-echo Estado de la placa: `tail /var/log/placa.log|grep Power|tail -1|cut -c 146`
-echo Producción FV: `cat /tmp/FV |cut -c 11-16`W
-echo Batería: `cat /tmp/Bat | cut -c 11-12`%
-echo Consumo: `cat /tmp/Consumo |cut -c 11-14`W
-procesos.sh
+# Si hay fichero de log, extraemos la temperatura de allí, si no, la pedimos directamente a la placa.
+if [ -f /var/log/placa.log ]; then
+	ACS=$(tail /var/log/placa.log |grep SENSOR|tail -1 |cut -c 132-135)
+	Placa=$(tail /var/log/placa.log|grep placa/STATE|tail -1|cut -c 209-211)
+fi
+if [ `expr length "$ACS"` -eq 0 ]; then	
+	ACS=$(curl -s http://placa/cm?cmnd=Status%2010|cut -c 89-92)
+	Placa=$(curl -s http://placa/cm?cmnd=Status|cut -c 90)
+fi
+echo Temperatura del agua: $ACSº
+echo Estado de la placa: $Placa
+for f in Cons FV Bat 
+do
+	vari=$(cat /tmp/$f)
+	vari=$(json "$vari")
+	vari=$(LC_ALL=C printf "%.*f\n" 2 "$vari")
+	echo $f: $vari
+done
+procesos
 # Vemos cuanto espacio queda libre para ponerlo en otro color en caso de que haya poco
 # Usamos el printf para conventirlo a entero redondeando puesto que el bash no admite comparar floats
 printf -v tam '%.0f' $(df -h /mnt/e|tail -1|cut -c 31-33)
