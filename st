@@ -30,7 +30,7 @@ fi
 # Si hay fichero de log, extraemos la temperatura de allí, si no, la pedimos directamente a la placa.
 if [ -f /var/log/placa.log ]; then
 	ACS=$(tail /var/log/placa.log |grep SENSOR|tail -1 |cut -c 132-135)
-	Placa=$(tail /var/log/placa.log|grep placa/STATE|tail -1|cut -c 209-211)
+	Placa=$(tail /var/log/placa.log|grep placa/STATE|tail -1|cut -c 205-207)
 fi
 if [ `expr length "$ACS"` -eq 0 ]; then	
 	ACS=$(curl -s http://placa/cm?cmnd=Status%2010|cut -c 89-92)
