@@ -2586,32 +2586,35 @@ def Temperatura(Cual = 'Temperatura'):
 			file.writelines(f[0] + ',' + str(f[1]) + ',' + str(acti) + '\n')
 	return
 
-def Temperatura_Anual(Cual = 'TemperaturaA'):
+def Temperatura_Anual(Debug = False):
 	""" Se encarga de crear una gráfica con la temperatura mínima, media y máxima del agua a las 18:000 en la placa solar de
-		cada mes del último año y también el timepo que ha estado encendida.
+		cada mes y también el tiempo que ha estado encendida desde que tenemos datos.
 	"""
 	import sqlite3, datetime, dateutil.relativedelta
 	# Cargamos los datos excluyendo los de la Bomba, por ahora
 	bd = sqlite3.connect('/mnt/e/.mini/placa.db')
 	cursor = bd.cursor()
 	# Obtenemos la fecha
-	fecha = datetime.datetime.now()
+	fechafinal = datetime.datetime.now()
+	# Ponemos la fecha inicial
+	fecha = datetime.datetime(2018, 4, 1)
 	# Creamos la tabla que va a almacenar todos los valores, Min, Media, Max y Activo
 	Valores = [[]]
 	# Limpiamos para que no se nos quede el primer elemento vacío y podamos meterla en el bucle
 	Valores.clear()
-	# Hacemos bucle yendo desde hace 2 años hacia adelante, de manera que podremos comparar el mes pasado con el de hace un año
-	for f in range(25,0,-1):
-		# Retrocedemos en el tiempo
-		EsteMes = fecha - dateutil.relativedelta.relativedelta(months = f)
+	while fecha.strftime('%Y%m') < fechafinal.strftime('%Y%m'):
 		# Obtenemos la Tª mínima, media y máxima a las 18:0%
-		Valores.append(list(cursor.execute("select  Min(Temperatura), Round(Avg(Temperatura),1), Max(Temperatura) from placa where fecha like '" + EsteMes.strftime('%Y-%m-__ 18:0%%') + "'"))[0])
+		Valores.append(list(cursor.execute("select  Min(Temperatura), Round(Avg(Temperatura),1), Max(Temperatura) from placa where fecha like '" + fecha.strftime('%Y-%m-__ 18:0%%') + "'"))[0])
 		# Obtenemos cuantos minutos ha estado encedida la placa cada mes
-		Valores[25-f] = Valores[25-f], list(cursor.execute("select count(Encendido)*5 from placa where encendido=1 and fecha like '" + EsteMes.strftime('%Y-%m-%%') + "'"))[0][0], EsteMes.strftime('%Y%m15')
+		Valores[len(Valores)-1] = Valores[len(Valores)-1], list(cursor.execute("select count(Encendido)*5 from placa where encendido=1 and fecha like '" + fecha.strftime('%Y-%m-%%') + "'"))[0][0], fecha.strftime('%Y%m15')
+		# Añadimos un mes a la fecha inicial
+		fecha = fecha + dateutil.relativedelta.relativedelta(months = 1)
+		if Debug:
+			print(fecha)
 	# Cerramos la base de datos
 	bd.close()
 	# Creamos el fichero de datos
-	with open(env.WEB + Cual + '.csv', 'w') as file:
+	with open(env.WEB + 'TemperaturaA.csv', 'w') as file:
 		# Escribo cabeceras
 		file.writelines('Mes,Mínima,Media,Máxima,Horas_Activa\n')
 		for f in Valores:
