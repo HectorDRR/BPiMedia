@@ -4,3 +4,11 @@ mqtt_sub-inverter
 sube.sh
 reset-router
 __pycache__/*
+.bash_aliases
+.bashrc
+2.awk
+FastCGI.sh
+crontab.txt
+ipblock.sh
+lee-ip-ssh.sh
+
