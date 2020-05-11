@@ -1037,7 +1037,7 @@ def CreaPaginas():
 	""" Se encarga de crear de una sola vez todas las páginas web de pelis. Útil para cuando actualcemos la BD
 	"""
 	for f in Tipos:
-		CreaWebO(f, 'where tipo="' + f)
+		CreaWebO(f, 'where tipo="' + f + '"')
 	CreaWebO('Todas')
 	
 def CreaWeb(p1 = 'Ultimas', Pocas = 0, Debug = False):
@@ -1656,7 +1656,6 @@ def GuardaPelis(Cuales, Que):
 		# Cambiamos los permisos para marcarla como ya copiada rwxrwxrwx
 		per =  os.stat(peli)
 		os.chmod(peli, per.st_mode | stat.S_IRWXG | stat.S_IRWXO)
-		Log('Se ha copiado la película ' + peli)
 	Log('Hemos terminado de copiar las pelis HD', True)
 	os.system('/home/hector/bin/ledonoff none')
 	return

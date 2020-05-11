@@ -1,23 +1,5 @@
 #!/bin/bash
-function procesos {
-	# Comprueba la existencia de los procesos normales del sistema
-	for f in amuled transmiss minidlna smb vsftpd noip2 python3; do
-        	pgrep -a $f
-        	if [ $? -eq 1 ]
-                	then
-                	echo Existe un problema con el proceso $f
-                	read p
-        	fi
-	done
-}
-function Series {
-	# Lista las series pendientes de pasar a disco
-	find /mnt/e/pasados/ -type f -perm -u+rwx -exec du -ch '{}' +|sort -k 2|more
-}
-function json {
-	# Extrae de una cadena JSON tipo {"item": valor} el valor
-	echo ${1:`expr index "$1" :`:-1}
-}
+source /home/hector/bin/funciones.sh
 uptime
 free -h
 tem=$(cat /sys/class/thermal/thermal_zone0/temp)
@@ -26,19 +8,11 @@ if [ $1p == sp ];
 	then Series;
 	exit;
 fi
-# ~/bin/venus.sh Como lo estamos ejecutando cada 15 minutos, no vale la pena hacerlo cada vez que ejecutemos el st
-# Si hay fichero de log, extraemos la temperatura de allí, si no, la pedimos directamente a la placa.
-if [ -f /var/log/placa.log ]; then
-	ACS=$(tail /var/log/placa.log |grep SENSOR|tail -1 |cut -c 132-135)
-	Placa=$(tail /var/log/placa.log|grep placa/STATE|tail -1|cut -c 205-207)
-fi
-if [ `expr length "$ACS"` -eq 0 ]; then	
-	ACS=$(curl -s http://placa/cm?cmnd=Status%2010|cut -c 89-92)
-	Placa=$(curl -s http://placa/cm?cmnd=Status|cut -c 90)
-fi
+# Obtenemos estado y temperatura de la placa
+Estado_Placa
 echo Temperatura del agua: $ACSº
 echo Estado de la placa: $Placa
-for f in Cons FV Bat 
+for f in Consumo FV Bateria 
 do
 	vari=$(cat /tmp/$f)
 	vari=$(json "$vari")
@@ -56,13 +30,7 @@ if [ $tam -lt 10 ]
 fi
 echo .
 cat /mnt/e/util/quedan.txt
-if [ -a /media/Series ]
-    then
-	echo Ahora lo que hay en el pen, luego lo que hay en la carpeta HD pendiente
-	read p
-	ls -lhst /media/Series /media/Pelis
-fi
-echo HD pendiente pasar a Pen
+echo HD pendiente pasar a Metal
 find /mnt/e/HD/ -maxdepth 1 \( -perm 666 -o -perm 646 -o -perm 677 \) -exec du -ch '{}' +
 echo HD pendiente pasar a disco
 find /mnt/e/HD/ -maxdepth 1 \( -perm 666 -o -perm 766 \) -exec du -ch '{}' +
@@ -99,6 +67,6 @@ dmesg -T|grep -v 'shrunk window'|tail -30
 echo el Syslog
 read p
 sudo tail -40 /var/log/syslog|grep -v CRON
-tail /var/log/placa.log
+[ -f /var/log/placa.log ] && tail /var/log/placa.log
 [ -f /tmp/mulacaida.txt ] && cat /tmp/mulacaida.txt
 [ -f /tmp/ftpcaido.txt ] && cat /tmp/ftpcaido.txt
