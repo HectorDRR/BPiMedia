@@ -2556,8 +2556,9 @@ def Temperatura(Cual = 'Temperatura'):
 	# Cargamos los datos excluyendo los de la Bomba, por ahora
 	bd = sqlite3.connect('/mnt/e/.mini/placa.db')
 	cursor = bd.cursor()
-	# Obtenemos la fecha de ayer para sacar los de las últimas 24 horas
+	# Obtenemos la fecha de hoy y la guardamos para que se refleje cuando se actualizó la página
 	fecha = datetime.datetime.now()
+	Actualizado = fecha.strftime('%c')
 	# Obtenemos cuantos minutos ha estado encedida la placa este mes
 	activa = list(cursor.execute("select count(Encendido)*5 from placa where encendido=1 and fecha > '" + fecha.strftime('%Y-%m-00') + "'"))[0][0]
 	# Lo pasamos a horas y minutos
@@ -2572,7 +2573,7 @@ def Temperatura(Cual = 'Temperatura'):
 	bd.close()
 	# Escribimos los valores en formato JSON para pasárselos a la página web
 	with open(env.WEB + 'Activo.txt', 'w') as file:
-		file.writelines('{"Activa":"' + str(activa) + '","Minima":' + str(medias[0]) + ',"Media":' + str(medias[1]) + ',"Maxima":' + str(medias[2]) + '}')
+		file.writelines('{"Activa":"' + str(activa) + '","Minima":' + str(medias[0]) + ',"Media":' + str(medias[1]) + ',"Maxima":' + str(medias[2]) + ',"Actualizado":"' + Actualizado + '"}')
 	with open(env.WEB + Cual + '.csv', 'w') as file:
 		# Escribo cabeceras
 		file.writelines('Hora,Temperatura,Activo\n')
