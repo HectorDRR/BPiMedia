@@ -2371,47 +2371,61 @@ def Queda(Fichero, Destino, FTP = False):
 		return False
 	return True
 
-def ReiniciaDLNA(Debug = False):
-	""" Función para reiniciar el MiniDLNA en caso de ficheros corruptos pero manteniendo los bookmarks de los ficheros exitentes
-	También aprovecharemos para reiniciar el art_cache
+def ReiniciaDLNA(Fichero = '', Debug = False):
+	""" Función para reiniciar el MiniDLNA en caso de ficheros corruptos o cambio de confiuración pero manteniendo los bookmarks 
+	de los ficheros exitentes. También aprovecharemos para reiniciar el art_cache
 	"""
 	import sqlite3
 	
-	if not Debug:
+	if Debug:
+		print('Modo debug, no se parará el servicio ni se modificará la BD')
+	else:
 		# Paramos servicio
-		os.system('sudo service minidlna stop')
+		os.system('pkill minidlnad')
 		# Eliminamos el art_cache
 		os.system('sudo rm -r /mnt/e/.mini/art_cache')
-	# Abrimos BD
-	mini_db = sqlite3.connect('/mnt/e/.mini/files.db')
-	# Creamos cursor
-	mini_cursor = mini_db.cursor()
-	# Obtenemos la lista de bookmarks activos. Asumimos que la BD está aún accesible, si no, tendríamos que recurrir al fichero Bookmarks.txt
-	marcadores = mini_cursor.execute("select title,sec from bookmarks inner join details on bookmarks.id=details.id where path like '/mnt/e/pasados/%' order by path;").fetchall()
-	# Cerramos el cursor y la BD ya que tenemos que dejar que el servicio la reinicie
-	mini_cursor.close()
-	mini_db.close()
+	# Si le pasamos un fichero como parámetro cogemos de ahí los bookmarks, habitualmente será '/mnt/e/.mini/Bookmarks.txt'
+	if not Fichero == '':
+		with open(Fichero) as file:
+			# Leemos el fichero y generamos una lista usando el \n como separador
+			lineas = file.read().split('\n')
+		# Eliminamos un camopp extra vacío que se crea al hacer el split
+		lineas.remove('')
+		# Pasamos a marcadores 
+		marcadores = [f.split('|') for f in lineas]
+	else:
+		# Si no, los cogemos directamente de la BD del MiniDLNA
+		mini_db = sqlite3.connect('/mnt/e/.mini/files.db')
+		# Creamos cursor
+		mini_cursor = mini_db.cursor()
+		# Obtenemos la lista de bookmarks activos. Asumimos que la BD está aún accesible, si no, tendríamos que recurrir al fichero Bookmarks.txt
+		marcadores = mini_cursor.execute("select title,sec from bookmarks inner join details on bookmarks.id=details.id where path like '/mnt/e/pasados/%' order by path;").fetchall()
+		# Cerramos el cursor y la BD ya que tenemos que dejar que el servicio la reinicie
+		mini_cursor.close()
+		mini_db.close()
 	if Debug:
 		print(marcadores)
 	else:
 		# Lanzamos el minidlna en modo restauración de la BD
-		os.system('sudo minidlnad -R')
+		os.system('minidlnad -R')
 		# Ahora tenemos que esperar hasta que en el log indique que ha terminado la indexación
 		mini_log = ''
 		while not 'Finished parsing playlists' in mini_log:
-			time.sleep(15)
-			mini_log = os.system('tail -1 /mnt/e/.mini/minidlna.log').read()
-	# Rehacemos la tabla de bookmarks
+			time.sleep(5)
+			mini_log = os.popen('tail -1 /mnt/e/.mini/minidlna.log').read()
+	# Conectamos con la BD
 	mini_db = sqlite3.connect('/mnt/e/.mini/files.db')
 	# Creamos cursor
 	mini_cursor = mini_db.cursor()
-	# Obtenemos la lista de bookmarks activos
+	# Rehacemos la lista de bookmarks activos
 	for f in marcadores:
 		id = mini_cursor.execute('select id from details where title = "' + f[0] + '"').fetchone()[0]
 		if Debug:
 			print('insert into bookmarks (id, sec) values (' + str(id) + ', ' + str(f[1]) + ')')
 		else:
-			mini_cursor.execute('insert into bookmarks (id, sec) values (' + id + ', ' + f[1] + ')')
+			mini_cursor.execute('insert into bookmarks (id, sec) values (' + str(id) + ', ' + str	(f[1]) + ')')
+			# Procesamos los cambios
+			mini_db.commit()
 	marcadores = mini_cursor.execute("select title,sec from bookmarks inner join details on bookmarks.id=details.id where path like '/mnt/e/pasados/%' order by path;").fetchall()
 	# Cerramos el cursor y la BD
 	mini_cursor.close()
@@ -2729,7 +2743,7 @@ def Trailer(p1):
 	os.remove(env.TMP + 'NFO')
 	return xmlTrailer
 
-def Traspasa(Copio = 1, Monta = 1):
+def Traspasa(Copio = 0, Monta = 0):
 	""" Se encarga de pasar lo bajado a Series al pendrive de mi hermano y a su correspondiente carpeta en pasados
 	Copio si valor 1, se encarga de decirle si copia los ficheros al pen, en caso de 0 solo los procesa para ponerlos en pasados
 	Monta si valor 1, desmonta el pen al acabar, en caso de 0 lo deja montado
