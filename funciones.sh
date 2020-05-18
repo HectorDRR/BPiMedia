@@ -36,3 +36,10 @@ function Estado_Placa {
 	fi
 	echo \{\"ACS\":$ACS\}>/mnt/f/ACS.txt
 }
+function SacaValor {
+	# Se encarga de obtener el valor de un fichero json y redondearlo a dos decimales
+	vari=$(cat /tmp/$1)
+	vari=$(json "$vari")
+	vari=$(LC_ALL=C printf "%.*f\n" 2 "$vari")
+	echo \"$1\":$vari,
+}

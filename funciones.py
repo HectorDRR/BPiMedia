@@ -2353,9 +2353,6 @@ def Prueba(Param, Debug = False):
 	print(type(Param)==str, int(Param))
 	if Debug:
 		print(Debug)
-	#print(pp.Temp, pp.Estado)
-	pp = Victron()
-	print(pp.Generado, pp.Consumido)
 	return
 
 def Queda(Fichero, Destino, FTP = False):
@@ -2521,6 +2518,29 @@ def SacaSubs(P1, Pista = '3'):
 	
 	error = os.system('mkvextract tracks "' + P1 + '" ' + Pista + ':"' + P1[:-3] + 'srt"')
 	return error
+
+def SalvaPantalla(TimeOut = 90):
+	""" Macro para hacer un salvapantallas en una sola pantalla en Windows para que a Dácil se le apague la pantalla del Youtube
+	"""
+	import win32gui
+	# Vamos a comprobar cada 1 segundos y poner un tiempo por defecto de minuto y medio
+	# Cogemos el segundo actual
+	ultimo = int(time.time())
+	# Asumimos que el monitor está activado en este momento
+	encendido = True
+	while True:
+		# Si estamos en la pantalla renovamos último
+		if win32gui.GetCursorPos()[0] < 0:
+			ultimo = int(time.time())
+			# Si está apagado, con doble click se activa, hasta que encontremos como apagarlo de verdad
+			#if not monitor:
+			#	os.system('e:\\winutil\enciende.exe')
+		# Si no, comprobamos si ha pasado el timeout desde ultimo y está encendido
+		elif int(time.time()) - ultimo > int(Timeout) and encendido:
+			# Apagamos
+			os.system('e:\\Winutil\\MultiscreenBlank2.exe /minimized /blank id \\\\.\\DISPLAY2')
+		# Esperamos 1 segundo
+		time.sleep(1)
 
 def SubCanciones(p1):
 	""" Se encarga de suprimir de un fichero de subtítulos todas las líneas de texto excepto las que pertenecen a canciones (#...#)
