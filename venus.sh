@@ -28,6 +28,7 @@ linea=$linea$(SacaValor Vertido)
 # Obtenemos todos los valores de estadística de la web de Victron (24h, semana, mes y año) desde Python
 fvTotal=$(cat /tmp/fvhoy)
 # Al unirlo, le quitamos la ',' final a línea y la '{' incial de fvhoy y añadimos en medio la fecha y hora de actualización
-echo \{${linea:0:-1},\"Actualizado\":\"$(date +%c)\",${fvTotal:1}>/mnt/f/Placas.txt
+echo \{${linea:0:-1},\"Actualizado\":\"$(date +%c)\"\}>/mnt/f/Placas.txt
+# ,${fvTotal:1}>/mnt/f/Placas.txt
 # En paralelo, obtenemos la temperatura de la placa de ACS que ahora la hemos separado a otra página
 Estado_Placa

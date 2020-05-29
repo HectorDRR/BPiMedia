@@ -612,7 +612,88 @@ class Victron:
 		if Debug:
 			print(self.Totales, self.Estadistica)
 
-	def MandaCurl(self, Comando, Metodo = 'GET'):
+	def Semana(self, Cuantos = 7):
+		""" Método para obtener la curva detallada de consumos y producción de los últimos x días en un csv que después manipule
+			la página en JavaScript para representar todos los valores.
+			Los valores vienen precedidos por el timestamp en formato Unix, es decir, el numero de segundos pasados desde 1/1/1970
+			por lo que tendremos que hacer la conversión al formato que coge el gráfico.
+			Queda pendiente saber si los tiempos son en UTC o en que para hacer un recálculo según estemos en horario de invierno
+			o verano. Al parecer en verano coincidimos con el UTC. Ya veremos en Octubre que pasa...
+			Lo que nos innteresa del JSON viene dentro de records y tiene estos encabezados cuyo significado es el siguiente:
+			Bc: Battery consumption
+			Pc: Photovoltaic consumption
+			Pb: Photovoltaic to battery
+			Pg: Photovoltaic to grid
+			Gc: Grid consumption
+			Bg: Battery to grid (este es desechable pues suele dar un valor e-13)
+			kwh: Da el total
+			
+			*** Descubrimos que no todas las lecturas coinciden en fecha y número, lo que por otro lado es lógico si pasamos sin
+				sol unas cuantas horas, por lo que en ese tiempo no hay lecturas de ninguna que empiece por P. Esto nos obliga a
+				replantearnos la manera de organizar los datos
+		"""
+		import datetime
+		# Le restamos a la fecha los segundos de x días * 24 horas
+		atras = int(datetime.datetime.utcnow().timestamp()) - (Cuantos * 86400)
+		# Obtenemos la estadística detallada de los últimos dos días en intervalos de 15minutos
+		leido = self.MandaCurl(self.URLInstalacion + 'stats?type=kwh&start=' + str(atras) + '&interval=15mins')
+		self.Semana = leido
+		# Generamos la tabla con la cabecera
+		csv = ['Fecha,Generado,Autoconsumido,Abatería,DeBatería,Vertido,DeRed']
+		# Vamos a empezar a tratar los datos para separar la información en columnas
+		temp = []
+		# Cogemos uno de los datos como referencia para hacer el barrido en todos
+		for f in leido["records"]:
+			# Si son los totales, los ignoramos o ya vemos después que hacemos con ellos ya que los tenemos por otro lado
+			if f == 'kwh':
+				continue
+			# Recorremos todos los valores metiéndolos en una sola tabla indicando a que valor pertenecen
+			for g in leido["records"][f]:
+				# Vamos a transformar las fechas de timestamp al formato que necesita la gráfica quitando los últimos 3 dígitos
+				fecha = datetime.datetime.fromtimestamp(g[0] / 1000).strftime('%Y-%m-%d %H:%M:%S')
+				# Primero la fecha, luego el valor y por último el tipo de valor. Multiplicamos por 1.000 puesto que viene en kWh
+				temp.append([fecha, round(g[1], 3) * 1000, f])
+		# Ahora tenemos que unificar, para ello, primero ordenamos la tabla
+		temp.sort()
+		print(temp)
+		# Inicializamos las variables cogiendo la primera fecha como referencia
+		linea = [temp[0][0], 0, 0, 0, 0, 0, 0]
+		# Luego la recorremos formando las líneas del CSV donde la fecha coincida, dejando vacíos los campos que no existan
+		for f in temp:
+			# Si la fecha cambia, generamos la línea del CSV con los valores que tengamos
+			if not f[0] == linea[0]:
+				# Generamos el total de generado sumando Pc + Pb + Pg
+				linea[1] = linea[2] + linea[3] + linea[4]
+				# Pasamos a '' los valores en 0
+				#linea = [ None if f == 0 else f for f in linea ]
+				lin = ''
+				for g in linea:
+					if g == 0:
+						lin = lin +','
+					else:
+						lin = lin + str(g) + ','
+				csv.append(lin[:-1])
+				# Reiniciamos variables
+				linea = [f[0], 0, 0, 0, 0, 0, 0]
+			# Rellenamos los valores manteniendo el orden del CSV
+			print(linea)
+			if f[2] == 'Pc':
+				linea[2] = f[1]
+			elif f[2] == 'Pb':
+				linea[3] = f[1]
+			elif f[2] == 'Bc':
+				linea[4] = f[1]
+			elif f[2] == 'Pg':
+				linea[5] = f[1]
+			# Solo nos queda el Gc
+			else:
+				linea[6] = f[1]
+		# Ahora que tenemos los valores en CSV los guardamos en el fichero
+		with open(env.WEB + 'FVSemanal.csv', 'w') as file:
+			for f in csv:
+				file.writelines(str(f) + '\n')
+
+	def MandaCurl(self, Comando, Metodo = 'GET', CSV = False):
 		""" Usamos el Curl para obtener información de la API
 		"""
 		import json
@@ -627,9 +708,11 @@ class Victron:
 		#return buffer.getvalue().decode()
 		# Debido a los problemas para istalar el PyCurl en el Odroid lo hacemos a través de una llamada al sistema
 		#Comando = Comando.replace(';','%3B').replace(' ','%20')
-		respuesta = json.loads(os.popen('curl -s -H "' + self.Token + '" -X ' + Metodo + ' "https://vrmapi.victronenergy.com/v2/' + Comando + '"').read())
+		respuesta = os.popen('curl -s -H "' + self.Token + '" -X ' + Metodo + ' "https://vrmapi.victronenergy.com/v2/' + Comando + '"').read()
+		if not CSV:
+			respuesta = json.loads(respuesta)
 		if self.Debug:
-			print('MandaCurl: ' + Comando)
+			print('MandaCurl: ' + 'curl -s -H "' + self.Token + '" -X ' + Metodo + ' "https://vrmapi.victronenergy.com/v2/' + Comando + '"')
 		return respuesta
 		
 def BajaSeries(Batch = False, Debug = False):
@@ -2353,6 +2436,8 @@ def Prueba(Param, Debug = False):
 	print(type(Param)==str, int(Param))
 	if Debug:
 		print(Debug)
+	pp=Victron()
+	pp.Semana()
 	return
 
 def Queda(Fichero, Destino, FTP = False):
@@ -2581,7 +2666,8 @@ def Temperatura(Cual = 'Temperatura'):
 	import sqlite3, datetime, json, claves
 	# Obtenemos los valores totales de hoy del sistema fotovoltaico
 	fv = Victron()
-	with open('/tmp/fvhoy', 'w') as file:
+	# Y los ponemos accesibles a la página en formato JSON
+	with open(env.WEB + 'FV.txt', 'w') as file:
 		file.writelines(json.dumps(fv.Estadistica))
 	# Lanzamos la consulta de los parámetros del sistema FV y de la placa de ACS para que se actualice el fichero /mnt/f/Placas.txt del que se nutre la página web inicial. Más adelante lo portaremos todo a Python
 	os.system('/home/hector/bin/venus.sh ' + claves.VictronInterna)
