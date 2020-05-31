@@ -626,13 +626,14 @@ class Victron:
 			Pg: Photovoltaic to grid
 			Gc: Grid consumption
 			Bg: Battery to grid (este es desechable pues suele dar un valor e-13)
+			Gb: También desechable por ahora, de la batería a la red. 
 			kwh: Da el total
 			
 			*** Descubrimos que no todas las lecturas coinciden en fecha y número, lo que por otro lado es lógico si pasamos sin
 				sol unas cuantas horas, por lo que en ese tiempo no hay lecturas de ninguna que empiece por P. Esto nos obliga a
 				replantearnos la manera de organizar los datos
 		"""
-		import datetime
+		import datetime, json
 		# Le restamos a la fecha los segundos de x días * 24 horas
 		atras = int(datetime.datetime.utcnow().timestamp()) - (Cuantos * 86400)
 		# Obtenemos la estadística detallada de los últimos dos días en intervalos de 15minutos
@@ -655,7 +656,8 @@ class Victron:
 				temp.append([fecha, round(g[1], 3) * 1000, f])
 		# Ahora tenemos que unificar, para ello, primero ordenamos la tabla
 		temp.sort()
-		print(temp)
+		if self.Debug:
+			print(temp)
 		# Inicializamos las variables cogiendo la primera fecha como referencia
 		linea = [temp[0][0], 0, 0, 0, 0, 0, 0]
 		# Luego la recorremos formando las líneas del CSV donde la fecha coincida, dejando vacíos los campos que no existan
@@ -676,7 +678,8 @@ class Victron:
 				# Reiniciamos variables
 				linea = [f[0], 0, 0, 0, 0, 0, 0]
 			# Rellenamos los valores manteniendo el orden del CSV
-			print(linea)
+			if self.Debug:
+				print(linea)
 			if f[2] == 'Pc':
 				linea[2] = f[1]
 			elif f[2] == 'Pb':
@@ -692,6 +695,18 @@ class Victron:
 		with open(env.WEB + 'FVSemanal.csv', 'w') as file:
 			for f in csv:
 				file.writelines(str(f) + '\n')
+		# Mandamos a un JSON los totales incluyendo la fecha de actualización
+		actualizado = datetime.datetime.now().strftime('%c')
+		totales = self.Semana["totals"]
+		# Añadimos la fecha
+		totales.update({"Actualizado":actualizado})
+		# Modificamos el total para que incorpore solamente lo que nos interesa
+		totales["kwh"] = round(totales["Pc"] + totales["Pb"] + totales["Pg"], 2)
+		# Eliminamos el Gb y el BG ya que son despreciables
+		totales.pop("Gb")
+		totales.pop("Bg")
+		with open(env.WEB + 'FVSemanal.txt', 'w') as file:
+			file.writelines(json.dumps(totales))
 
 	def MandaCurl(self, Comando, Metodo = 'GET', CSV = False):
 		""" Usamos el Curl para obtener información de la API
@@ -2436,8 +2451,6 @@ def Prueba(Param, Debug = False):
 	print(type(Param)==str, int(Param))
 	if Debug:
 		print(Debug)
-	pp=Victron()
-	pp.Semanal()
 	return
 
 def Queda(Fichero, Destino, FTP = False):
@@ -2627,6 +2640,12 @@ def SalvaPantalla(TimeOut = 90):
 		# Esperamos 1 segundo
 		time.sleep(1)
 
+def Semanal():
+	""" Para generar cada hora la gráfica de consumo y generación de la fotovoltaica de los últimos 7 días
+	"""
+	fv=Victron()
+	fv.Semanal()
+
 def SubCanciones(p1):
 	""" Se encarga de suprimir de un fichero de subtítulos todas las líneas de texto excepto las que pertenecen a canciones (#...#)
 	Nos falta tratar las líneas mixtas, que contienen texto normal y letros de canciones
@@ -2705,8 +2724,6 @@ def Temperatura(Cual = 'Temperatura'):
 			else:
 				acti = ''
 			file.writelines(f[0] + ',' + str(f[1]) + ',' + str(acti) + '\n')
-	# Lanzamos la obtención de la estadística semanal de la FV
-	fv.Semanal()
 	return
 
 def Temperatura_Anual(Debug = False):
