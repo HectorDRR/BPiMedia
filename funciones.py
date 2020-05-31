@@ -612,7 +612,7 @@ class Victron:
 		if Debug:
 			print(self.Totales, self.Estadistica)
 
-	def Semana(self, Cuantos = 7):
+	def Semanal(self, Cuantos = 7):
 		""" Método para obtener la curva detallada de consumos y producción de los últimos x días en un csv que después manipule
 			la página en JavaScript para representar todos los valores.
 			Los valores vienen precedidos por el timestamp en formato Unix, es decir, el numero de segundos pasados desde 1/1/1970
@@ -636,7 +636,7 @@ class Victron:
 		# Le restamos a la fecha los segundos de x días * 24 horas
 		atras = int(datetime.datetime.utcnow().timestamp()) - (Cuantos * 86400)
 		# Obtenemos la estadística detallada de los últimos dos días en intervalos de 15minutos
-		leido = self.MandaCurl(self.URLInstalacion + 'stats?type=kwh&start=' + str(atras) + '&interval=15mins')
+		leido = self.MandaCurl(self.URLInstalacion + 'stats?type=kwh&start=' + str(atras) + '&interval=hours')
 		self.Semana = leido
 		# Generamos la tabla con la cabecera
 		csv = ['Fecha,Generado,Autoconsumido,Abatería,DeBatería,Vertido,DeRed']
@@ -663,7 +663,7 @@ class Victron:
 			# Si la fecha cambia, generamos la línea del CSV con los valores que tengamos
 			if not f[0] == linea[0]:
 				# Generamos el total de generado sumando Pc + Pb + Pg
-				linea[1] = linea[2] + linea[3] + linea[4]
+				linea[1] = linea[2] + linea[3] + linea[5]
 				# Pasamos a '' los valores en 0
 				#linea = [ None if f == 0 else f for f in linea ]
 				lin = ''
@@ -2437,7 +2437,7 @@ def Prueba(Param, Debug = False):
 	if Debug:
 		print(Debug)
 	pp=Victron()
-	pp.Semana()
+	pp.Semanal()
 	return
 
 def Queda(Fichero, Destino, FTP = False):
@@ -2705,6 +2705,8 @@ def Temperatura(Cual = 'Temperatura'):
 			else:
 				acti = ''
 			file.writelines(f[0] + ',' + str(f[1]) + ',' + str(acti) + '\n')
+	# Lanzamos la obtención de la estadística semanal de la FV
+	fv.Semanal()
 	return
 
 def Temperatura_Anual(Debug = False):
