@@ -7,7 +7,9 @@ En primer lugar, mantendremos una lista de las funciones implementadas, su funci
 que son opcionales
 """
 
-import time, shutil, os, re, sys, stat
+import time, shutil, os, re, sys, stat, json, inspect
+import claves
+import paho.mqtt.client as mqtt
 
 # Definición de variables para hacer la macro portable entre distintas configuraciones/plataformas
 env = __import__('Entorno_' + sys.platform)
@@ -17,6 +19,57 @@ Series = []
 # Creamos una variable con los tipos de películas que procesamos, que a su vez se corresponden con las carpetas y con las páginas web
 Tipos = ['Pelis', 'Documentales', 'Vistas', 'Infantiles', 'Musica', 'Cortos', 'SD']
 
+class AccesoMQTT:
+	""" Para acceder al Venus GX a través de MQTT de cara a gestionar la recarga del coche del sistema FV
+	"""
+	def __init__(self, debug = False):
+		self.debug = debug
+		# Creo el cliente
+		self.client = mqtt.Client('Coche')
+		# Conecto al broker
+		print(self.client.connect('venus'))
+		# Asigno la función que va a procesar los mensajes recibidos
+		self.client.on_message = self.leo
+		# Me subscribo a los tópicos necesarios
+		print(self.client.subscribe('N/' + claves.VictronInterna + '/system/0/Dc/Battery/Soc', 0))
+		# Inicializamos Bateria
+		self.bateria = 0
+		# Comenzamos el bucle
+		print(self.client.loop_start())
+		# Inicializamos la variable que servirá para que no me mande más de un mensaje a la hora
+		self.hora = 0
+
+	def leo(self, client, userdata, message):
+		""" Esta función es llamada para hacer las lecturas y procesar los mensajes suscritos
+		"""
+
+		# Lo importamos en formato json
+		self.mensaje = json.loads(message.payload.decode('utf-8'))
+		self.bateria = self.mensaje['value']
+		Log(self.bateria, True, Fichero='/tmp/Bateria.log')
+		# Aquí deberíamos de comprobar si la batería está por debajo de un valor y estamos cargando el coche
+		# Por ahora solo lo hacemos en horario diurno para probar su funcionamiento
+		if self.bateria <= 50 and datetime.datetime.now().hour < 23 and datetime.datetime.now().hour > 8:
+			# Deberíamos de cortar la carga o pasar a la red, dependiendo de lo que hayamos pedido
+			# Por ahora, hasta que montemos el Dual y los contactores, nos quedaremos con enviar un mail
+			if not datetime.datetime.now().hour == self.hora:
+				Log(f"Debug, mensaje: {mensaje}, {mensaje['value']}")
+				os.system(f'echo Desconecta el coche |mutt -s "La batería está al {self.Bateria}%" Hector.D.Rguez@gmail.com')
+				self.Hora = datetime.datetime.now().hour
+		if self.debug:
+			print(f"Debug, self.mensaje: {self.mensaje}, {mensaje['value']}")
+
+	def pregunta(self):
+		""" Manda la petición por MQTT
+		"""
+		self.client.publish('R/' + claves.VictronInterna + '/system/0/Dc/Battery/Soc', '')
+
+	def start(self):
+		""" Iniciamos el proceso
+		"""
+		# Pedimos el primer valor
+		self.pregunta()
+		
 class Capitulo:
 	""" Tratamiento de capítulos de series, teniendo en cuenta si se manipulan a través de FTP o localmente
 	Dividimos el nombre en:
@@ -429,9 +482,9 @@ class SonoffTH:
 					 1 Activamos manualmente con opción de tiempo para desonexión automática
 					 2 Estamos controlando la placa de manera automática
 					 4 Nueva función de control automático de manera más segura, usando backlog para asegurarse de que no se queda nada conectado
-		Partimos de una consigna mínima que fijamos en base a TMin y al mes en curso que hemos visto es suficiente para bañarnos
-		los 3. Lo modificamos dependiendo de las veces que se ha activado la bomba a través de una variable en la propia placa,
-		Var1, equivalente a la propiedad Bañados, que se reincia a 0 todos los días a las 4 AM por una Rule en la propia placa:
+		Partimos de una consigna mínima que fijamos en base a TMin, que se define en el propio SonOFf dentro de Mem2, y al mes en
+		curso que hemos visto es suficiente para bañarnos los 3. Lo modificamos dependiendo de las veces que se ha activado la
+		bomba a través de una variable en la propia placa, Var1, equivalente a la propiedad Bañados, que se reincia a 0 todos los días a las 4 AM por una Rule en la propia placa:
 		rule1 on time#Minute=240 do var1 0 endon
 		stat/placa/RESULT = {"Rule1":"ON","Once":"OFF","StopOnError":"OFF","Free":477,"Rules":"on time#Minute=240 do var1 0 endon"}
 		El valor de Var1 lo modificamos directamente desde el botón cuando lo apretamos con el comando 'add1 1' que le suma 1 a la 
@@ -556,8 +609,6 @@ class SonoffTH:
 	def SonOff_leo(self, client, userdata, message):
 		""" Esta función es llamada desde SonOff para hacer las lecturas y procesar los mensajes suscritos de SonOff
 		"""
-		import json
-
 		# Lo importamos en formato json
 		self.mensaje = json.loads(message.payload.decode("utf-8"))
 		if self.Debug:
@@ -594,7 +645,6 @@ class Victron:
 	def __init__(self, Debug = False):
 		""" Inicializamos la clase con el token y los valores de acceso a la API
 		"""
-		import claves
 		self.Debug = Debug
 		# Token de seguridad para autentificarme llamado internamente ParaWeb
 		self.Token = claves.VictronToken
@@ -633,7 +683,7 @@ class Victron:
 				sol unas cuantas horas, por lo que en ese tiempo no hay lecturas de ninguna que empiece por P. Esto nos obliga a
 				replantearnos la manera de organizar los datos
 		"""
-		import datetime, json
+		import datetime
 		# Le restamos a la fecha los segundos de x días * 24 horas
 		atras = int(datetime.datetime.utcnow().timestamp()) - (Cuantos * 86400)
 		# Obtenemos la estadística detallada de los últimos dos días en intervalos de 15minutos
@@ -711,7 +761,6 @@ class Victron:
 	def MandaCurl(self, Comando, Metodo = 'GET', CSV = False):
 		""" Usamos el Curl para obtener información de la API
 		"""
-		import json
 		#import pycurl
 		#from io import BytesIO
 		#buffer = BytesIO()
@@ -741,7 +790,6 @@ def BajaSeries(Batch = False, Debug = False):
 	"""
 	from ftplib import FTP
 	import paramiko
-	import claves
 	# Para convertir a boleano el valor del parámetro
 	Batch = (Batch == 'True')
 	Debug = (Debug == 'True')
@@ -1045,11 +1093,12 @@ def Clasifica():
 	return			
 
 def Copia():
-	"""Se encarga de realizar una copia del contenido de varias carpetas modificado desde ayer al ftp de Movelcan
-		También lanza una macro, rcopias.sh, para usar el rclone y copiar el contenido al Google Drive
+	""" Se encargaba de realizar una copia del contenido de varias carpetas por FTP al ftp de Movelcan y lanzando una macro,
+	rcopias.sh, para usar el rclone y copiar el contenido al Google Drive.
+	Al dejar de usar el FTP de Movelcan por que hostinger me lo ha cerrado por falta de uso, no tiene sentido seguir usándolo
+	así que cambiamos en el cron la llamada a esta función por la llamada directa a la macro que hace las copias al Drive
 	"""
 	from ftplib import FTP
-	import claves
 	
 	# Designamos las carpetas que copiar
 	rutas = ['/home/hector/bin', '/mnt/e/util', '/mnt/f', '/mnt/f/scripts', '/mnt/e/.mini']
@@ -1506,7 +1555,7 @@ def Generacion(Fichero = '/tmp/Canarias.json', Debug = False):
 		con los siguientes parámetros:
 		https://apidatos.ree.es/es/datos/generacion/estructura-renovables?start_date=2020-04-01T00:00&end_date=2020-04-27T23:59&geo_trunc=electric_system&geo_limit=canarias&geo_ids=8742&time_trunc=day
 	"""
-	import json, datetime
+	import datetime
 	# Obtenemos la fecha de ayer y la de hace 30 días
 	fechafin = datetime.datetime.now() - datetime.timedelta(days = 1)
 	fechaini = fechafin - datetime.timedelta(days = 30)
@@ -2260,14 +2309,14 @@ def ListaSeries(Ruta='', Debug = False):
 	os.system('grep Faltan ' + env.PLANTILLAS + etiq)
 	return
 	
-def Log(p1, imp = False, fallo = '', Fichero = env.LOG):
+def Log(p1, imp = False, Fichero = env.LOG):
 	"""Función para escribir en el log del sistema de mulita
 	p1 es el mensaje a escribir
 	imp si es verdadero lo imprimimos en panatala además de ponerlo en el log
-	fallo mostraría la rutina que dio origen al mensaje. Faltaría automatizarlo.
 	Damos la opción Fichero para poder escribir a un log diferente, por ejemplo para que las pelis con fallos no saturen el log
 	"""
-	escri = time.strftime('%d/%m/%Y %H:%M:%S') + ' ' + fallo + p1 + '\n'
+	escri = f"{time.strftime('%d/%m/%Y %H:%M:%S')} {inspect.stack()[2][3]} {p1}\n"
+	print(escri)
 	with open(Fichero, 'a', encoding='utf-8') as fichero:
 		fichero.write(escri)
 	if imp:
@@ -2444,13 +2493,18 @@ def Placa(Quehacemos = 4, Tiempo = 0, Debug = False):
 	placa.Controla(Quehacemos, Tiempo = Tiempo, Debug = Debug)
 	return placa.Temperatura
 
-def Prueba(Param, Debug = False):
+def Prueba(param, debug = False):
 	""" Para probar funciones que estamos desarrollando
 		Procesado de los mensajes de la bomba
 	"""
-	print(type(Param)==str, int(Param))
-	if Debug:
-		print(Debug)
+	print(type(param)==str, int(param))
+	if debug:
+		print(debug)
+	pp = AccesoMQTT(True)
+	pp.start()
+	pp.pregunta()
+	time.sleep(int(param))
+	print(pp.bateria)
 	return
 
 def Queda(Fichero, Destino, FTP = False):
@@ -2682,7 +2736,7 @@ def Temperatura(Cual = 'Temperatura'):
 	""" Se encarga de crear una gráfica con la temperatura del agua en la placa solar de la última semana y un fichero de texto
 		con el tiempo que ha estado la placa activa en el mes en curso.
 	"""
-	import sqlite3, datetime, json, claves
+	import sqlite3, datetime
 	# Obtenemos los valores totales de hoy del sistema fotovoltaico
 	fv = Victron()
 	# Y los ponemos accesibles a la página en formato JSON
