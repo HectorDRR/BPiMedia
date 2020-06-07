@@ -1,6 +1,6 @@
 # Proyecto BPiMedia
 
-Esto no es más que un conjunto de funciones agrupadas para realizar varias tareas. Las dos tareas principales consisten en la gestión de mi colección de películas y series. La segunda, la gestión de una pequeña parte domotizada de mi casa, como es la placa de ACS y su resistencia así como una bomba para la recirculación del agua caliente. También hemos incorporado el estado de mi nueva instalación fotovoltaica con batería.
+Esto no es más que un conjunto de funciones agrupadas para realizar varias tareas. Las dos tareas principales consisten en la gestión de mi colección de películas y series. La segunda, la gestión de una pequeña parte domotizada de mi casa, como es la placa de ACS y su resistencia así como una bomba para la recirculación del agua caliente. También hemos incorporado el estado de mi nueva instalación fotovoltaica con batería. Así mismo, empezamos también a implementar el control de la carga de los coches con un SonOff Dual y un contactor teniendo en cuenta la hora y la capacidad restante de la batería.
 
 Todo el contenido se agrupa principalmente en base a esos dos núcleos.
 
