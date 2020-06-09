@@ -36,6 +36,13 @@ if [ $? -eq 1 ]
 		echo $(date) Botón parado, lo arrancamos de nuevo>>/tmp/mulacaida.txt
 		sudo screen -d -m -S Botones -h 20000 /home/hector/bin/boton.sh
 fi
+# Comprobamos también si está vivo el proceso de automatización de carga del coche
+pgrep -f CargaCoche
+if [ $? -eq 1 ]
+	then 
+		echo $(date) CargaCoche parado, lo arrancamos de nuevo>>/tmp/mulacaida.txt
+		screen -d -m -S CargaCoche -h 20000 /home/hector/bin/CargaCoche.py
+fi
 # Comprobamos el vsftpd
 pgrep vsftpd
 if [ $? -eq 1 ]
