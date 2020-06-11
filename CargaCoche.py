@@ -50,6 +50,7 @@ class AccesoMQTT:
 		self.hora = 0
 		self.rele1 = 0
 		self.rele2 = 0
+		self.SOCMinimo = 50
 		# Obtenemos valores
 		for f in Preguntas:
 			self.pregunta(f)
@@ -120,8 +121,6 @@ class AccesoMQTT:
 		"""
 		# Pedimos por MQTT lo solicitado
 		self.client.publish(Preguntas[que], '')
-		if self.debug:
-			print(Preguntas[que])
 		time.sleep(0.5)
 
 	def controla(self):
@@ -171,14 +170,15 @@ class AccesoMQTT:
 if __name__ == "__main__":
 	if len(sys.argv) == 2:
 		debug = True
+		nivel = logging.DEBUG
 	else:
 		debug = False
+		nivel = logging.INFO
 	# Inicializamos el logging
-	logging.basicConfig(
-		filename='/tmp/Bateria.log',
-		format='%(asctime)s %(message)s',
-		datefmt='%d/%m/%Y %H:%M:%S',
-		level=logging.DEBUG)
+	logging.basicConfig(handlers = [logging.FileHandler('/tmp/Bateria.log'),
+									logging.StreamHandler()],
+		format = '%(asctime)s %(message)s', datefmt = '%d/%m/%Y %H:%M:%S', 
+		level = nivel)
 	# Inicializamos el objeto para acceder al MQTT
 	victron = AccesoMQTT(debug)
 	# Nos quedamos en bucle eterno controlando cada 2 minutos
