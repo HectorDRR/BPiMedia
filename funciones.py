@@ -2834,6 +2834,7 @@ def SubCanciones(p1):
 def Temperatura(Cual = 'Temperatura'):
 	""" Se encarga de crear una gráfica con la temperatura del agua en la placa solar de la última semana y un fichero de texto
 		con el tiempo que ha estado la placa activa en el mes en curso.
+		También obtiene la información de la web de Victron y del Venus GX sobre el rendimiento de la instalación FV
 	"""
 	import sqlite3, datetime
 	# Obtenemos los valores totales de hoy del sistema fotovoltaico
