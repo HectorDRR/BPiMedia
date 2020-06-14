@@ -1,19 +1,4 @@
 #!/bin/bash
-function procesos {
-	# Comprueba la existencia de los procesos normales del sistema
-	for f in amuled transmiss minidlna smb vsftpd noip2 python3; do
-        	pgrep -a $f
-        	if [ $? -eq 1 ]
-                	then
-                	echo Existe un problema con el proceso $f
-                	read p
-        	fi
-	done
-}
-function Series {
-	# Lista las series pendientes de pasar a disco
-	find /mnt/e/pasados/ -type f -perm -u+rwx -exec du -ch '{}' +|sort -k 2|more
-}
 function json {
 	# Extrae de una cadena JSON tipo {"item": valor} el valor
 	echo ${1:`expr index "$1" :`:-1}
@@ -36,10 +21,25 @@ function Estado_Placa {
 	fi
 	echo \{\"ACS\":$ACS\}>/mnt/f/ACS.txt
 }
+function procesos {
+	# Comprueba la existencia de los procesos normales del sistema
+	for f in amuled transmiss minidlna smb vsftpd noip2 Botones.py CargaCoche; do
+        	pgrep -afn $f
+        	if [ $? -eq 1 ]
+                	then
+                	echo Existe un problema con el proceso $f
+                	read p
+        	fi
+	done
+}
 function SacaValor {
 	# Se encarga de obtener el valor de un fichero json y redondearlo a dos decimales
 	vari=$(cat /tmp/$1)
 	vari=$(json "$vari")
 	vari=$(LC_ALL=C printf "%.*f\n" 2 "$vari")
 	echo \"$1\":$vari,
+}
+function Series {
+	# Lista las series pendientes de pasar a disco
+	find /mnt/e/pasados/ -type f -perm -u+rwx -exec du -ch '{}' +|sort -k 2|more
 }

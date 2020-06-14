@@ -70,8 +70,9 @@ class AccesoMQTT:
         self.mensaje = json.loads(message.payload.decode("utf-8"))
         self.bateria = self.mensaje["value"]
         logging.debug(f"Bateria al {self.bateria}%, {self.mensaje}")
-        if self.debug:
-            print(f"Bateria al {self.bateria}%, {self.mensaje}")
+		# Cuando el coche está cargando, mostramos como va la batería
+        if self.rele1:
+            print(f"Bateria al {self.bateria}%")
 
     def lee_EstadoDual(self, client, userdata, message):
         """ Esta función es llamada para leer el estado de los Relés
@@ -89,6 +90,9 @@ class AccesoMQTT:
         logging.debug(f"Relé1 = {self.rele1}, Relé2 = {self.rele2}, {self.mensaje}")
         if self.debug:
             print(f"Relé1 = {self.rele1}, Relé2 = {self.rele2}, {self.mensaje}")
+        # Lo mandamos a un fichero en el tmp para que podamos ver el estado en el st
+        with open('/tmp/Coche', 'w') as file:
+            file.writelines(str(self.rele1))
 
     def lee_Result(self, client, userdata, message):
         """ Esta función es llamada para leer el tanto el SOC Mínimo que tenemos que dejar en la batería
@@ -112,7 +116,8 @@ class AccesoMQTT:
             print(
                 f"SOC Mínimo {self.SOCMinimo}%, Relé1 = {self.rele1}, Relé2 = {self.rele2}, {self.mensaje}"
             )
-        logging.debug(
+        # Mostramos el estado del SonOff. Si ponemos el SOCMinimo a 10 continuará cargando indefinidamente
+        logging.info(
             f"SOC Mínimo {self.SOCMinimo}%, Relé1 = {self.rele1}, Relé2 = {self.rele2}, {self.mensaje}"
         )
 
