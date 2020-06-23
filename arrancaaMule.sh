@@ -14,7 +14,7 @@ do
 	fi
 done
 # Hay un chequeo extra por el amule que algunas veces no desparece el proceso pero está inactivo
-tail -1 /mnt/e/.aMule/logfile|grep -e 'Todos los archivos' -e 'All PartFiles' -e 'Asio Sockets'
+tail -5 /mnt/e/.aMule/logfile|grep -e 'Todos los archivos' -e 'All PartFiles' -e 'Asio Sockets'
 if [ $? -eq 0 ]
 	then
 		echo $(date) aMule parado, lo arrancamos de nuevo>>/tmp/mulacaida.txt
