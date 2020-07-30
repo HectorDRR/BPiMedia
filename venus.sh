@@ -5,10 +5,12 @@ source /home/hector/bin/funciones.sh
 # Generamos la lista de elementos a usar con un array 'asociativo' en bash
 declare -A lista
 # Leemos lo vertido a red total
-mosquitto_sub -h venus -t N/$Victron/grid/30/Ac/Energy/Reverse -C 1 >/tmp/Vertido &
-mosquitto_pub -h venus -t R/$Victron/grid/30/Ac/energy/Reverse -m ''
+#mosquitto_sub -h venus -t N/$Victron/grid/30/Ac/Energy/Reverse -C 1 >/tmp/Vertido &
+#mosquitto_pub -h venus -t R/$Victron/grid/30/Ac/energy/Reverse -m ''
 # Incluimos los tópicos que nos interesas, en este caso la producción de la FotoVoltaica, consumo, Red y SOC batería
-lista=([FV]=Ac/PvOnGrid/L1/Power [Consumo]=Ac/Consumption/L1/Power [Red]=Ac/Grid/L1/Power [Bateria]=Dc/Battery/Soc)
+lista=([FV]=Ac/PvOnOutput/L1/Power [Consumo]=Ac/Consumption/L1/Power [Red]=Ac/Grid/L1/Power [Bateria]=Dc/Battery/Soc)
+# Quitamos temporalmente el vertido debido a que aún no sabemos como obtenerlo después del cambio de configuración
+# [Vertido]=Ac/L1/Energy/Reverse
 # Hacemos un bucle para suscribirnos al elemento y hacer la petición
 for f in "${!lista[@]}"
 do
@@ -16,17 +18,18 @@ do
 	mosquitto_sub -h venus -t N/$Victron/system/0/${lista[$f]} -C 1 >/tmp/$f &
 	mosquitto_pub -h venus -t R/$Victron/system/0/${lista[$f]} -m ''
 done
-sleep 3
+sleep 4
 # Definimos la variable
 linea=''
 # Leemos los distintos ficheros para unirlos
 for f in "${!lista[@]}"
 do
-	linea=$linea$(SacaValor $f)
+	echo $f $(cat /tmp/$f)
+    linea=$linea$(SacaValor $f)
 done
-linea=$linea$(SacaValor Vertido)
+#linea=$linea$(SacaValor Vertido)
 # Obtenemos todos los valores de estadística de la web de Victron (24h, semana, mes y año) desde Python
-fvTotal=$(cat /tmp/fvhoy)
+#fvTotal=$(cat /tmp/fvhoy)
 # Al unirlo, le quitamos la ',' final a línea y la '{' incial de fvhoy y añadimos en medio la fecha y hora de actualización
 echo \{${linea:0:-1},\"Actualizado\":\"$(date +%c)\"\}>/mnt/f/Placas.txt
 # ,${fvTotal:1}>/mnt/f/Placas.txt

@@ -19,7 +19,6 @@ do
 	vari=$(LC_ALL=C printf "%.*f\n" 2 "$vari")
 	echo $f: $vari
 done
-echo Estado Coche: $(cat /tmp/Coche)
 procesos
 # Vemos cuanto espacio queda libre para ponerlo en otro color en caso de que haya poco
 # Usamos el printf para conventirlo a entero redondeando puesto que el bash no admite comparar floats

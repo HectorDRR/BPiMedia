@@ -4,7 +4,7 @@
 """
 import win32gui, time, sys, os
 # Vamos a poner un tiempo por defecto de minuto y medio
-if len(sys.argv) = 2:
+if len(sys.argv) == 2:
 	Timeout = int(sys.argv[1])
 else:
 	Timeout = 90
@@ -18,12 +18,16 @@ ultimo = int(time.time())
 # Asumimos que el monitor está activado en este momento
 encendido = True
 atenuado = False
+error = False
 while True:
-	# Obtenemos la esquina izquierda de la ventana activa
+	# Cuando el ordenador se bloquea, no hay ventana activa, así que nos saltamos la comprobación
 	try:
-		left = win32gui.GetWindowRect(win32gui.GetForegroundWindow())[0]
-	except pywintypes.error as error:
-		print('Ha habido algún problema con la obtención de las coordenadas de la ventana activa.\n', error)
+			# Obtenemos la esquina izquierda de la ventana activa
+			left = win32gui.GetWindowRect(win32gui.GetForegroundWindow())[0]
+	except:
+		time.sleep(3)
+		continue
+	error = False
 	# Obtenemos la posición del ratón
 	raton = win32gui.GetCursorPos()[0]
 	# Si la pantalla está apagada y el ratón está en ella, la encendemos
@@ -51,5 +55,5 @@ while True:
 	# Esperamos 1 segundo
 	time.sleep(1)
 	if Debug:
-		print('ratón y ventana', raton, win32gui.GetWindowRect(win32gui.GetForegroundWindow())[0])
+		print('ratón y ventana', raton, left)
 		print(encendido, atenuado)

@@ -12,7 +12,7 @@ if [ $? -eq 1 ]
 	then
 		cp /tmp/crontab.txt /home/hector/bin/crontab.txt
 fi
-for f in /home/hector/bin /mnt/f /mnt/e/util /mnt/e/.mini; do 
+for f in /home/hector/bin /mnt/f /mnt/e/util /mnt/e/.mini /home/hector/CargaCoche; do 
 	rclone sync $f Drive:Odroid/${f##*/} --exclude "art_cache/**" --exclude "__pycache__/*" --exclude ".git/**" -v --log-file /tmp/salcopias.txt
 done
 echo `date +%d/%m/%Y\ %H:%M:%S` [copias.sh] Terminada la copia al Google drive>>/mnt/e/.mini/milog.txt
