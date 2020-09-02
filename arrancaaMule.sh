@@ -2,7 +2,7 @@
 # Macro para chequear si los procesos principales del sistema están funcionando y si no, arrancarlos.
 # Generamos la lista de elementos a usar con un array 'asociativo' en bash
 declare -A lista
-lista=([transmission-da]='sudo service transmission-daemon start' [amuled]='sudo service amule-daemon restart' [Botones.py]='sudo screen -d -m -S Botones -h 20000 /home/hector/bin/boton.sh' [vsftpd]='sudo service vsftpd start' [noip2]='sudo noip2' [minidlnad]='/usr/local/sbin/minidlnad')
+lista=([transmission-da]='sudo service transmission-daemon start' [amuled]='sudo service amule-daemon restart' [Botones.py]='sudo screen -d -m -S Botones -h 20000 /home/hector/bin/boton.sh' [vsftpd]='sudo service vsftpd start' [noip2]='sudo noip2' [minidlnad]='sudo service minidlna start')
 # Extraemos el Cargacoche al haberlo migrado a Python2 e implementado en el Venus GX
 #[CargaCoche]='screen -d -m -S CargaCoche -h 20000 /home/hector/bin/CargaCoche.py'
 # Ahora hacemos el bucle para comprobar los procesos

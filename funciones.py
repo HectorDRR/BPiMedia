@@ -614,7 +614,7 @@ class SonoffTH:
 			if Tiempo == 0:
 				# Activamos el SonOff
 				#self.client.publish('cmnd/' + self.Topico + '/POWER', 'ON')
-				self.MandaCurl('Power On')
+				self.MandaCurl('BACKLOG pulsetime1 0;Power On')
 				Log('Activamos la ' + self.Topico + ' manualmente', self.Debug)
 			else:
 				# Activamos el SonOff por un tiempo determinado. El tiempo nos viene en segundos pero el SonOff lo recibe en ms
@@ -2589,6 +2589,7 @@ def Placa(Quehacemos = 4, Tiempo = 0, Debug = False):
 			return placa.Temperatura
 		if placa.Temperatura >= placa.TMin:
 			Log('La temperatura del agua está a ' + str(placa.Temperatura) + 'º y la consigna es de ' + str(placa.TMin) + 'º, por lo que no activamos la placa', True)
+            return placa.Temperatura
 	# Como ya está programado en la clase lo pasamos directamente
 	placa.Controla(Quehacemos, Tiempo = Tiempo, Debug = Debug)
 	return placa.Temperatura
