@@ -438,7 +438,7 @@ class Pelicula:
 		import zipfile
 
 		# Comprobamos si existe el fichero .NFO
-		if os.path.exists(env.MM + 'Msheets/' + self.Todo[:-4] + '.nfo'):
+		if not P1 == 'trailer' and os.path.exists(env.MM + 'Msheets/' + self.Todo[:-4] + '.nfo'):
 			ruta = env.MM + 'Msheets/' + self.Todo[:-4] + '.nfo'
 		# Comprobamos que existe el fichero tgmd
 		else:
@@ -2589,7 +2589,7 @@ def Placa(Quehacemos = 4, Tiempo = 0, Debug = False):
 			return placa.Temperatura
 		if placa.Temperatura >= placa.TMin:
 			Log('La temperatura del agua está a ' + str(placa.Temperatura) + 'º y la consigna es de ' + str(placa.TMin) + 'º, por lo que no activamos la placa', True)
-            return placa.Temperatura
+			return placa.Temperatura
 	# Como ya está programado en la clase lo pasamos directamente
 	placa.Controla(Quehacemos, Tiempo = Tiempo, Debug = Debug)
 	return placa.Temperatura
