@@ -72,4 +72,4 @@ sudo tail -40 /var/log/syslog|grep -v CRON
 [ -f /tmp/ftpcaido.txt ] && cat /tmp/ftpcaido.txt
 echo la carga del coche
 read p
-ssh -l root venus tail -20 /tmp/Carga.log
+ssh -l root venus tail -20 /home/root/lib/Carga.log

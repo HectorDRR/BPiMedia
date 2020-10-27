@@ -21,7 +21,7 @@ if [ $? -eq 0 ]
 	then
 		echo $(date) aMule parado, lo arrancamos de nuevo>>/tmp/mulacaida.txt
 		sudo service amule-daemon stop
+		pkill -9 amule
 		sudo service amule-daemon start
-		#pkill -9 amule
 		#amuled -c /mnt/e/.aMule/ -f
 fi

@@ -1167,6 +1167,26 @@ def BP(Peli, Comentario):
 		Log('Borramos ' + Peli + ' con el comentario: ' + Comentario, True)
 	return
 
+def CuantaCarga():
+    """ Función para extraer cuanto tiempo hemos cargado el coche de la FV para control estadístico
+    """
+    # Extraemos la fecha inicial del log
+    fecha = os.popen("ssh -l root venus head -n1 /home/root/lib/Carga.log |cut -c 1-10").read().split('\n')
+    # Extraemos del log (venus:/home/root/lib/Carga.log) las líneas que contienen el resumen diario
+    lineas = os.popen("ssh -l root venus grep estado /home/root/lib/Carga.log |cut -d ' ' -f 9,12").read().split('\n')
+    # Nos cepillamos la última línea vacía
+    lineas.remove('')
+    # Separamos minutos y segundos
+    lineas = [x.split() for x in lineas]
+    # Sumamos y obtenemos horas y minutos
+    horas = minutos = 0
+    for f in lineas:
+        minutos += int(f[1])
+        horas += int(f[0])
+    horas = round((round(minutos / 60) + horas) / 60)
+    minutos = (round(minutos / 60) + horas) % 60
+    print('El Coche se ha cargado %s:%s horas de la FV desde el %s' % (horas, minutos, fecha[0]))
+    
 def Clasifica():
 	""" Función para pasar las películas de los discos a carpetas organizadas alfabéticamente por la primera letra 
 	ya que con discos tan grandes es un suplicio buscarlas con el WDTV.
