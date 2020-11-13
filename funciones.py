@@ -527,6 +527,11 @@ class Pelicula:
 	
 class SonoffTH:
 	""" Para manipular los SonOff con sensor de temperatura
+        Creamos una regla en el SonOff para mantener una serie de párametros. Por un lado, reiniciar 
+        el contador de Bañados a una hora determinada y por otra, ponerlo a 0 siempre que se encienda
+        ya que nos ha ocurrido que si se tiene que reiniciar a alguna hora el programa casca puesto que var = '' en vez de a 0
+        rule1 on time#Minute=240 do var1 0 endon on system#Boot do var1 0 endon
+        Y después hay que hacer un rule1 1 para activar la regla. Podemos ver su estado poniendo rule1
 	"""
 	#import paho.mqtt.client as mqtt
 	
