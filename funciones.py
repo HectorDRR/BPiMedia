@@ -1048,7 +1048,7 @@ def Borra(Liberar = 50, Dias = 20, Auto = 0):
     el amule detecta que no hay espacio, de manera que no pregunta nada.
     """
     Log('Vamos a proceder a eliminar ficheros viejos de pasados')
-    # Sacamos la lista de ficheros con mas de 30 días de antiguedad y que los permisos 
+    # Sacamos la lista de ficheros con mas de 30 días de antigüedad y que los permisos 
     # indican que ya ha sido copiado a disco externo
     os.chdir(env.PASADOS)
     salida = os.popen('find . -type f -mtime +' + str(Dias) + ' -perm -u+rw ! -iname "*.jpg"|sort').read()
@@ -1065,7 +1065,7 @@ def Borra(Liberar = 50, Dias = 20, Auto = 0):
     #Convertimos a entero el parámetro pasado en caso de que viniera como string
     if type(Liberar) is str:
         Liberar = int(Liberar)
-    #Quitamos las series que estamos viendo. Añadimos el .upper() por si ha camabiado la mayúscula/minúscula en algún momento
+    #Quitamos las series que estamos viendo. Añadimos el .upper() por si ha cambiado la mayúscula/minúscula en algún momento
     for l in lista:
         No = 0
         for v in ver:
@@ -1307,7 +1307,7 @@ def CopiaNuevas(Pen):
     return
 
 def CreaPaginas():
-    """ Se encarga de crear de una sola vez todas las páginas web de pelis. Útil para cuando actualcemos la BD
+    """ Se encarga de crear de una sola vez todas las páginas web de pelis. Útil para cuando actualicemos la BD
     """
     for f in Tipos:
         CreaWebO(f, 'where tipo="' + f + '"')
@@ -1621,10 +1621,10 @@ def Divide(Serie):
         return(Serie)
 
 def Duracion(Tiempo):
-    """ Convertimos el tiempo del formato HH:MM:SS a segundos
+    """ Convertimos el tiempo del formato HH:MM:SS.mmm a milisegundos porque la nueva TV Samsung manda los ms
     """
     hora, minuto, seg = Tiempo.split(':')
-    return (int(hora) * 3600) + (int(minuto) * 60) + int(seg[0:2])
+    return (((int(hora) * 3600) + (int(minuto) * 60)) * 1000 + int(float(seg)*1000))
 
 def Etiqueta(Ruta):
     """ Obtenemos la etiqueta del disco montado en Ruta sin la '/' final
@@ -2235,6 +2235,8 @@ def ListaCapitulos(Serie, Ruta, Debug = False):
     lista = glob.glob('*.avi')
     lista.extend(glob.glob('*.mkv'))
     lista.extend(glob.glob('*.mp4'))
+    # Pasamos a minúsculas por si nos hemos confundido en algún capítulo de manera que al ordenar no nos informe erróneamente de que falta algún capítulo
+    lista = [ x.lower() for x in lista ]
     lista.sort()
     # Convertimos en objeto y lo metemos en una lista
     serie = []
