@@ -2626,7 +2626,8 @@ def Placa(Quehacemos = 4, Tiempo = 0, Debug = False):
             Log('La temperatura del agua está a ' + str(placa.Temperatura) + 'º y la consigna es de ' + str(placa.TMin) + 'º, por lo que no activamos la placa', True)
             return placa.Temperatura
     # Como ya está programado en la clase lo pasamos directamente
-    placa.Controla(Quehacemos, Tiempo = Tiempo, Debug = Debug)
+    if placa.Bañados < 3:
+        placa.Controla(Quehacemos, Tiempo = Tiempo, Debug = Debug)
     return placa.Temperatura
 
 def Prueba(param, debug = False):
