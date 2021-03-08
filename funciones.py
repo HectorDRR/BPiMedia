@@ -2610,9 +2610,9 @@ def Placa(Quehacemos = 4, Tiempo = 0, Debug = False):
         # En caso de habernos bañado todos establecemos la variable Mem1/NoActivar en la placa a 1 y salimos, 
         # pero antes comprobamos si es la última activación en la noche (21:45) o la última de la mañana. En ese caso, 
         # restablecemos la variable
+        hora = int(time.strftime('%H%M'))
         if placa.NoActivar or placa.Bañados > 2:
             Log('Ya se han bañado todos así que no activamos placa')
-            hora = int(time.strftime('%H%M'))
             if (hora > 2144 or (hora > 755 and hora < 801)):
                 placa.NoActivar = 0
                 Log('Restablecemos NoActivar a 0')
@@ -2620,7 +2620,7 @@ def Placa(Quehacemos = 4, Tiempo = 0, Debug = False):
         # entonces desactivamos el que la placa se active al día siguiente por la mañana
         if placa.Bañados > 2 and hora > 2144 and int(time.strftime('%w')) > 4:
             placa.NoActivar = 1
-            Log('Ponemos NoActivar a 1 ya que nos hemos bañado todos')
+            Log('Ponemos NoActivar a 1 ya que nos hemos bañado todos y empieza el finde')
             return placa.Temperatura
         if placa.Temperatura >= placa.TMin:
             Log('La temperatura del agua está a ' + str(placa.Temperatura) + 'º y la consigna es de ' + str(placa.TMin) + 'º, por lo que no activamos la placa', True)

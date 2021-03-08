@@ -63,7 +63,7 @@ echo El Amule
 read p
 amulecmd -c "show DL"
 echo El Log del sistema
-dmesg -T|grep -v 'shrunk window'|tail -30
+dmesg -T|grep -v 'vidioc_try_fmt:379'|tail -30
 echo el Syslog
 read p
 sudo tail -40 /var/log/syslog|grep -v CRON
