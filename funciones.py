@@ -1174,24 +1174,67 @@ def BP(Peli, Comentario):
 
 def CuantaCarga():
     """ Función para extraer cuanto tiempo hemos cargado el coche de la FV para control estadístico
+        Obtenemos tanto el tiempo por mes como el total acumulado
+        Esta función la ejecutaremos una vez al mes para generar los datos para la gráfica en la web
+        La llamaremos desde la misma que generamos otros gráficos mensuales
     """
-    # Extraemos la fecha inicial del log
-    fecha = os.popen("ssh -l root venus head -n1 /home/root/lib/Carga.log |cut -c 1-10").read().split('\n')
+    import datetime
     # Extraemos del log (venus:/home/root/lib/Carga.log) las líneas que contienen el resumen diario
-    lineas = os.popen("ssh -l root venus grep estado /home/root/lib/Carga.log |cut -d ' ' -f 9,12").read().split('\n')
+    lineas = os.popen("ssh -l root venus grep estado /home/root/lib/Carga.log |cut -d ' ' -f 1,9,12").read().split('\n')
     # Nos cepillamos la última línea vacía
     lineas.remove('')
-    # Separamos minutos y segundos
+    # Separamos fecha, minutos y segundos
     lineas = [x.split() for x in lineas]
+    # Aunque las llamamos horas y minutos, realmente son minutos y segundos, de ahí que después dividamos por 60
+    horas = minutos = horasm = minutosm = 0
+    # Cogemos el mes inicial para saber cuando cambiamos
+    mes = lineas[0][0][3:10]
+    grafica = []
     # Sumamos y obtenemos horas y minutos
-    horas = minutos = 0
     for f in lineas:
-        minutos += int(f[1])
-        horas += int(f[0])
+        # Si cambiamos de mes imprimimos, acumulamos y reiniciamos variables
+        if not mes == f[0][3:10]:
+            # Mostramos el subtotal mensual
+            print('El Coche se ha cargado %s:%s horas de la FV el %s' % (round((round(minutosm / 60) + horasm) / 60), (round(minutosm / 60) + horasm) % 60, mes))
+            # Convertimos la fecha a formato yankee para que la pueda tratar el gráfico
+            fecha = datetime.datetime.strptime(f'01/{mes}','%d/%m/%Y')
+            # Vamos rellenando la lista para el CSV
+            grafica.append([fecha.strftime('%Y-%m-%d'), round(minutosm / 60) + horasm])
+            # Vamos totalizando
+            minutos += minutosm
+            horas += horasm
+            minutosm = horasm = 0
+            # Cambiamos el mes
+            mes = f[0][3:10]
+        # Acumulamos para procesar el mes
+        minutosm += int(f[2])
+        horasm += int(f[1])
+    # Siempre se nos quedará colgado el último mes
+    print('El Coche se ha cargado %s:%s horas de la FV el %s' % (round((round(minutosm / 60) + horasm) / 60), (round(minutosm / 60) + horasm) % 60, mes))
+    # Volvemos a convertir la fecha. Habrá que intentar hacerlo de una manera más elegante
+    fecha = datetime.datetime.strptime(f'01/{mes}','%d/%m/%Y')
+    # Añadimos el último total mensual
+    grafica.append([fecha.strftime('%Y-%m-%d'), round(minutosm / 60) + horasm])
+    # Totalizamos
+    minutos += minutosm
+    horas += horasm
+    # Pasamos los minutos a horas y los segundos a minutos
     horas = round((round(minutos / 60) + horas) / 60)
+    # Nos quedamos con los minutos sobrantes
     minutos = (round(minutos / 60) + horas) % 60
-    print('El Coche se ha cargado %s:%s horas de la FV desde el %s' % (horas, minutos, fecha[0]))
-    
+    # La fecha actual para mostrar al final de la página
+    actual = datetime.datetime.now().strftime('%c')
+    # Imprimimos el total
+    print('El Coche se ha cargado %s:%s horas de la FV desde Septiembre del 2020' % (horas, minutos))
+    # Generamos el CSV
+    with open(env.WEB + 'cargaFV.csv','w') as cargaFV:
+        cargaFV.write('Mes,Tiempo\n')
+        for f in grafica:
+            cargaFV.write(f'{f[0]},{f[1]}\n')
+    # Generamos el JSON para rellenar la página
+    with open(env.WEB + 'cargaFV.txt','w') as cargaFV:
+        cargaFV.write(f'{{"Total":"{horas}:{minutos}", "Actualizado":"{actual}"}}')
+
 def Clasifica():
     """ Función para pasar las películas de los discos a carpetas organizadas alfabéticamente por la primera letra 
     ya que con discos tan grandes es un suplicio buscarlas con el WDTV.
@@ -1673,6 +1716,95 @@ def FAApi(Serie, Mini = 0):
         Log('No se ha encontrado la serie en FilmAffinity: ', True)
         print(lista)
     return pagina, imagen
+
+def Fotos(Debug = '0', prefijo = ''):
+    """
+    Función para procesar las fotos descargadas del Google Photos a través del Google TakeOut y tener 
+    nuestra propia copia de seguridad.
+    Los primeros años los teníamos replicado en el Drive, hasta el 2019, y guardaban esa organización, 
+    por mes. Los extraídos del TakeOut están solo separados por año
+    Primero solo vamos a proceder a mover los ficheros a la carpeta de su mes correspondiente para mantener 
+    la misma organización que había anteriormente
+    Hay algunas fotos de Effects o algunas que se editan que aparecen como  '-ha editado' que no tienen JSON
+    Así mismo parece haber problema con las fotos con () que por alguna razón los cambia de sitio en el json, por ejemplo:
+    image(4).jpg
+    image.jpg(4).json
+    Así mismo, también ha problemas con los nombres largos que recorta el .json. Por ejemplo:
+    Comparativa motor Diésel - eléctrico (Ioniq).jpeg
+    Comparativa motor Diésel - eléctrico (Ioniq).j.json
+    """
+    import glob, datetime, locale
+    if eval(Debug):
+        nivel = logging.DEBUG
+    else:
+        nivel = logging.INFO
+    logging.basicConfig(format="%(asctime)s %(message)s", datefmt="%d/%m/%Y %H:%M:%S", level=nivel)
+    # Obtenemos el año de la carpeta en la que estamos
+    año = os.getcwd()[os.getcwd().rfind('/')+1:]
+    if not len(año) == 4:
+        logging.info('No estamos en una carpeta de un año. Salimos')
+        return 1
+    logging.info('Pasamos a procesar las que incluyen la fecha en el nombre.')
+    # Definimos los prefijos más comunes
+    pre = ['', 'IMG_', 'VID_', 'IMG-']
+    # Si pasamos algún parámetro se trata de otro prefijo más
+    if len(prefijo) > 0:
+        pre.append(prefijo)
+    # Procedemos a procesar todos los ficheros
+    for f in pre:
+        # Obtenemos los ficheros que empiezan por el año que estamos tratando añadiendo los prefijos
+        lista = glob.glob(f'{f}{año}*')
+        # La ordenamos
+        lista.sort()
+        # Movemos los ficheros a la carpeta del mes correspondiente
+        for g in lista:
+            mes = g[4+len(f):6+len(f)]
+            # Si no existe la carpeta, la creamos
+            if not os.path.exists(mes):
+                os.mkdir(mes)
+                logging.debug(f'Creamos carpeta {mes}')
+            logging.debug(f'Movemos {g} a su carpeta {mes}')
+            os.rename(g, f'{mes}/{g}')
+    # Hacemos limpieza eliminando las sheets de las películas
+    print('¿Deseas borrar las sheets de las películas (*mkv*)? (s/n)')
+    print(glob.glob('*mkv*'))
+    p = input()
+    if p == "s":
+        os.remove('*mkv*')
+    else:
+        logging.info('No eliminamos nada')
+    # Una vez hemos terminado con las fáciles, procedemos a tratar los que no incluyen fecha en el nombre sino dentro del JSON
+    logging.info('Procesamos los JSON de las que han quedado')
+    lista = glob.glob('*.json')
+    lista.sort()
+    # Guardamos el LC_TIME actual
+    defecto = locale.getlocale(locale.LC_TIME)
+    # Cambiamos el locale
+    locale.setlocale(locale.LC_TIME, 'es_ES.utf8')
+    for f in lista:
+        # Importamos el json
+        fecha = json.load(open(f,'r'))['photoTakenTime']['formatted']
+        faño = fecha.split()[2]
+        # Nos quedamos solo con el mes y cogemos solo 3 caracteres puesto que por ejemplo en Septiembre se salta los cánones y pone sept
+        mes = datetime.datetime.strptime(fecha.split()[1][:3],'%b').month
+        # Rellenamos con 0 el mes
+        mes = f'{mes:0>2}'
+        # Si no es de este año, sacamos mensaje y no procesamos, por ahora
+        if not faño == año:
+            logging.info(f'El fichero {f} es del año {faño}. No lo procesamos')
+            continue
+        # Comprobamos que exista la carpeta del mes
+        if not os.path.exists(mes):
+            logging.debug(f'Creamos carpeta mes')
+            os.mkdir(f'{mes}')
+        # Quitamos el .json
+        logging.debug(f'Movemos {f[:-5]} a {mes}/{f[:-5]}')
+        os.rename(f[:-5], f'{mes}/{f[:-5]}')
+        # Y movemos también el .json para quitarlo del raíz e ir limpiando. Luego veremos si es mejor borrarlo directamente.
+        os.rename(f, f'{mes}/{f}')
+    # Restablecemos el locale
+    locale.setlocale(locale.LC_TIME, defecto)
+    return 0
 
 def Generacion(Fichero = '/tmp/Canarias.json', Debug = False):
     """ Función para graficar la generación de electricidad en Canarias de la última semana según tecnologías.
@@ -2666,7 +2798,7 @@ def ReiniciaDLNA(Fichero = '', Debug = False):
         print('Modo debug, no se parará el servicio ni se modificará la BD')
     else:
         # Paramos servicio
-        os.system('pkill minidlnad')
+        os.system('pkill -9 minidlnad')
         # Eliminamos el art_cache
         os.system('sudo rm -r /mnt/e/.mini/art_cache')
     # Si le pasamos un fichero como parámetro cogemos de ahí los bookmarks, habitualmente será '/mnt/e/.mini/Bookmarks.txt'
@@ -2903,7 +3035,7 @@ def Temperatura(Cual = 'Temperatura'):
     bd.close()
     # Escribimos los valores en formato JSON para pasárselos a la página web
     with open(env.WEB + 'Activo.txt', 'w') as file:
-        file.writelines('{"Activa":"' + str(activa) + '","Minima":' + str(medias[0]) + ',"Media":' + str(medias[1]) + ',"Maxima":' + str(medias[2]) + ',"Actualizado":"' + Actualizado + '"}')
+        file.writelines(f'{{"Activa":"{activa}","Minima":{medias[0]},"Media":{medias[1]},"Maxima":{medias[2]},"Actualizado":"{Actualizado}}}')
     with open(env.WEB + Cual + '.csv', 'w') as file:
         # Escribo cabeceras
         file.writelines('Hora,Temperatura,Activo\n')
