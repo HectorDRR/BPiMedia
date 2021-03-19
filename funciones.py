@@ -569,7 +569,7 @@ class SonoffTH:
         # Creo el cliente
         #self.client = self.mqtt.Client(Topico)
         # Conecto al broker
-        #self.client.connect('192.168.1.8')
+        #self.client.connect('192.168.3.8')
         # Asigno la función que va a procesar los mensajes recibidos
         #self.client.on_message = self.SonOff_leo
         # Lo despertamos de su letargo para que nos responda más rápido, ya que hemos observado que con el sleep activado tarda más tiempo
