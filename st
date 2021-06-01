@@ -31,11 +31,11 @@ fi
 echo .
 cat /mnt/e/util/quedan.txt
 echo HD pendiente pasar a Metal
-find /mnt/e/HD/ -maxdepth 1 \( -perm 666 -o -perm 646 -o -perm 677 \) -exec du -ch '{}' +
+find /mnt/e/HD/ -maxdepth 1 -name '*.mkv' \( -perm 666 -o -perm 646 -o -perm 677 \) -exec du -ch '{}' +
 echo HD pendiente pasar a disco
-find /mnt/e/HD/ -maxdepth 1 \( -perm 666 -o -perm 766 \) -exec du -ch '{}' +
+find /mnt/e/HD/ -maxdepth 1 -name '*.mkv' \( -perm 666 -o -perm 766 ! -name '*.part' \) -exec du -ch '{}' +
 echo HD Infantiles pendientes de pasar a disco
-find /mnt/e/HD/ -maxdepth 1 \( -perm 746 -o -perm 646 \) -exec du -ch '{}' +
+find /mnt/e/HD/ -maxdepth 1 -name '*.mkv'  \( -perm 746 -o -perm 646 ! -name '*.part' \) -exec du -ch '{}' +
 ls -lhst /mnt/e/HD|grep drwx
 echo Ahora las Series
 read p

@@ -131,6 +131,7 @@ class AccesoMQTT:
         """ Controla el estado de la batería y del relé y activa o desactiva 
             en función de la hora y el % de SOC
         """
+        import datetime
         # Obtenemos los datos de estado de la batería
         self.pregunta()
         # Nos quedamos con la hora para no saturar de mensajes en la misma hora
@@ -343,7 +344,7 @@ class Capitulo:
         # Si no existe la carpeta de la serie, comprobamos mayúsculas y minúsculas y la creamos
         if not os.path.exists(Donde + self.Serie):
             self.Existe()
-        if not Queda(capi.Todo, Donde):
+        if not Queda(self.Todo, Donde):
             if input('No queda espacio en ' + Donde) == 'n':
                 return
         try:
@@ -410,10 +411,10 @@ class Pelicula:
                         # Como ya tiene el paréntesis, añadimos un espacio y el año y cogemos parte del título
                         self.RenPeli(self.Todo[:-5] + ' ' + str(self.Año) + ')')
                         # Y actualizamos el nombre y el título
-                        self.Todo = Todo.replace(')', ' ' + str(self.Año) + ')')
+                        self.Todo = self.Todo.replace(')', ' ' + str(self.Año) + ')')
                         self.Titulo = self.Todo[0:-4]
 
-                        print('Cambiado ' + Todo + ' a ' + self.Todo)
+                        print('Cambiado a ' + self.Todo)
                     # Volvemos a la ruta inicial
                     os.chdir(donde)
         else:
@@ -432,9 +433,9 @@ class Pelicula:
     def SacaInfo(self, P1 = 'year'):
         """ Sacamos información del .nfo o del .tgmd (ThumbGen MetaData)
         """
-        import xml.etree.ElementTree as ET
+        #import xml.etree.ElementTree as ET
         from xml.dom.minidom import parseString
-        import xml
+        #import xml
         import zipfile
 
         # Comprobamos si existe el fichero .NFO
@@ -451,7 +452,7 @@ class Pelicula:
                         os.remove(env.TMP + 'NFO')
                         return ''
                 except zipfile.BadZipFile as e:
-                    Log('2: Ha habido un problema descomprimiendo el supuesto zip: ' + self.Todo, Fichero = env.PLANTILLAS + 'NoNfo.log')
+                    Log('2: Ha habido un problema descomprimiendo el supuesto zip: ' + e + self.Todo, Fichero = env.PLANTILLAS + 'NoNfo.log')
                     return ''
                 ruta = env.TMP + 'NFO'
             else:
@@ -463,7 +464,7 @@ class Pelicula:
         try:
             xmlParametro = dom.getElementsByTagName(P1)[0].toxml()
         except ValueError as e:
-            Log('4: No se ha encontrado el ' + p1 + ' de "' + self.Todo + '", ' + e, Fichero = env.PLANTILLAS + 'NoNfo.log')
+            Log('4: No se ha encontrado el ' + P1 + ' de "' + self.Todo + '", ' + e, Fichero = env.PLANTILLAS + 'NoNfo.log')
             return ''
         except IndexError as e:
             Log('5: Ha habido un problem con el ' + P1 + ' de "' + self.Todo + '", ' + str(e), Fichero = env.PLANTILLAS + 'NoNfo.log')
@@ -497,7 +498,7 @@ class Pelicula:
         else:
             linea = linea + '" class="hover-lib" id="caratulas/' + self.Todo[:-3] + 'jpg">'
         linea = linea + '<br /><font size="-1">' + self.Todo + '</font></a>\n'
-        if len(trailer) > 0:
+        if len(self.trailer) > 0:
             linea = linea + ' <a href="' + self.trailer + '" target="_trailer">[T]</a>'
         linea = linea + '</td>\n'
         return linea
@@ -610,7 +611,7 @@ class SonoffTH:
         """
         # En caso de pasarlo desde línea de comando como string, lo pasamos a int. Si ya viene como int no pasa nada
         Modo = int(Modo)
-        Teimpo = int(Tiempo)
+        Tiempo = int(Tiempo)
         if (Modo == 0 and self.Estado == 1):
             self.MandaCurl('Power Off')
             Log('Desactivamos la ' + self.Topico + ' manualmente', self.Debug)
@@ -1795,7 +1796,7 @@ def Fotos(Debug = '0', prefijo = ''):
             continue
         # Comprobamos que exista la carpeta del mes
         if not os.path.exists(mes):
-            logging.debug(f'Creamos carpeta mes')
+            logging.debug('Creamos carpeta mes')
             os.mkdir(f'{mes}')
         # Quitamos el .json
         logging.debug(f'Movemos {f[:-5]} a {mes}/{f[:-5]}')
@@ -1878,7 +1879,7 @@ def GeneraLista(Listado, Pelis, Serie = False, Debug = False):
                 with open(que + 'txt') as fiche:
                     try:
                         comen = fiche.readline()
-                    except UnicodeDecodeError as e:
+                    except UnicodeDecodeError:
                         Log('Error al procesar el comentario de ' + f, True)
                         continue
                 comen = comen[:-1]
@@ -1941,7 +1942,7 @@ def GeneraListaBD(Listado, Pelis, Serie = False, Debug = False):
             with open(que + 'txt') as fiche:
                 try:
                     comen = fiche.readline()
-                except UnicodeDecodeError as e:
+                except UnicodeDecodeError:
                     Log('Error al procesar el comentario de ' + f, True)
                     continue
             comen = comen[:-1]
@@ -1984,7 +1985,7 @@ def GuardaHD(Disco = 'HD-TB-8-1'):
     CreaPaginas()
     # Limpiamos las carátulas que hayan quedado en la carpeta env.HD
     LimpiaHD()
-    Etiq = GuardaLibre(env.HDG)
+    GuardaLibre(env.HDG)
     # Paramos el disco duro por si lo hemos dejado copiando. El parámetro -Sx establece en x*5 segundos el tiempo de inactividad antes de pararse
     os.system('sync &&cd &&sudo umount /mnt/HD &&sudo hdparm -y /dev/disk/by-label/' + Disco)
     return
@@ -2011,7 +2012,7 @@ def GuardaLibre(Ruta):
     try:
         donde = lista.index(vieja[0])
         lista[donde] = linea
-    except IndexError as e:
+    except IndexError:
         lista.append(linea)
     # Escribimos de nuevo el fichero
     lista.sort()
@@ -2033,7 +2034,7 @@ def GuardaPelis(Cuales, Que):
     os.system('/home/hector/bin/ledonoff heartbeat')
     # Generamos la lista de las pelis que no se han pasado copiado rw?r?-rw-
     # Más adelante, aprenderemos como hacer esto desde el mismo Python sin tener que recurrir al find
-    salida = os.popen("find . -type f -name '*.mkv' -perm 7" + Que + "6 -o -perm 6" + Que + "6").read()
+    salida = os.popen("find . -type f -name '*.mkv' -perm 7" + Que + "6 -o -perm 6" + Que + "6 ! -name '*.part'").read()
     # Convertimos en lista y quitamos elementos nulos
     lista = sorted(filter(None, salida.split('\n')))
     # Quitamos el './' inicial
@@ -2163,7 +2164,6 @@ def JTrailer(Peli, Debug = 0):
     pp = []
     # En qq nos quedamos con los títulos de las pelis
     qq = []
-    una = 0
     # Leemos línea por línea, cuando encontramos una peli, cogemos el trailer de la siguiente línea
     # en caso de que lo haya, si no, lo ponemos a nulo y pasamos a la siguiente
     for f in range(20,len(lista) - 5):
@@ -2182,7 +2182,7 @@ def JTrailer(Peli, Debug = 0):
     # Por si hay un problema con los acentos o ñ tenemos que comprobar que se encuentra la película
     try:
         trailer = pp[qq.index(Peli)]
-    except ValueError as e:
+    except ValueError:
         print('No se encuentra la peli: ' + Peli + '.\nQuizás problemas con acentos o ñ')
         trailer = 'No hay trailer'
     if trailer == '':
@@ -2956,7 +2956,7 @@ def SalvaPantalla(TimeOut = 90):
             #if not monitor:
             #   os.system('e:\\winutil\enciende.exe')
         # Si no, comprobamos si ha pasado el timeout desde ultimo y está encendido
-        elif int(time.time()) - ultimo > int(Timeout) and encendido:
+        elif int(time.time()) - ultimo > int(TimeOut) and encendido:
             # Apagamos
             os.system('e:\\Winutil\\MultiscreenBlank2.exe /minimized /blank id \\\\.\\DISPLAY2')
         # Esperamos 1 segundo
@@ -3021,12 +3021,15 @@ def Temperatura(Cual = 'Temperatura'):
     # Obtenemos la fecha de hoy y la guardamos para que se refleje cuando se actualizó la página
     fecha = datetime.datetime.now()
     Actualizado = fecha.strftime('%c')
-    # Obtenemos cuantos minutos ha estado encedida la placa este mes
+    # Obtenemos cuantos minutos ha estado encendida la placa este mes
     activa = list(cursor.execute("select count(Encendido)*5 from placa where encendido=1 and fecha > '" + fecha.strftime('%Y-%m-00') + "'"))[0][0]
     # Lo pasamos a horas y minutos
     activa = f'{activa // 60:02}:{activa % 60:02}'
     # Obtenemos la mínima, media y máxima del mes en curso
     medias = list(cursor.execute("select Min(Temperatura), round(Avg(Temperatura)), Max(Temperatura) from placa where fecha > '" + fecha.strftime('%Y-%m-00') + "' and fecha like '%%18:3%%'"))[0]
+    # El primer día de cada mes hasta pasadas las 18.30 obtenemos un valor None que nos descalabra la lectura desde la página web, así que lo cambiamos a 0
+    if medias[0] == None:
+        medias = [0, 0, 0]
     # Retrocedemos una semana
     fecha = fecha - datetime.timedelta(days = 7)
     # Añadimos el .fetchall() para pasar los datos como una lista y no seguir usando el cursor
@@ -3035,7 +3038,7 @@ def Temperatura(Cual = 'Temperatura'):
     bd.close()
     # Escribimos los valores en formato JSON para pasárselos a la página web
     with open(env.WEB + 'Activo.txt', 'w') as file:
-        file.writelines(f'{{"Activa":"{activa}","Minima":{medias[0]},"Media":{medias[1]},"Maxima":{medias[2]},"Actualizado":"{Actualizado}}}')
+        file.writelines(f'{{"Activa":"{activa}","Minima":{medias[0]},"Media":{medias[1]},"Maxima":{medias[2]},"Actualizado":"{Actualizado}"}}')
     with open(env.WEB + Cual + '.csv', 'w') as file:
         # Escribo cabeceras
         file.writelines('Hora,Temperatura,Activo\n')
@@ -3148,9 +3151,7 @@ def Total(p1, Tam = 'T'):
 def Trailer(p1):
     """ Se encarga de extraer del fichero NFO de una peli la información necesaria para obtener la URL del trailer de la película
     """
-    import xml.etree.ElementTree as ET
     from xml.dom.minidom import parseString
-    import xml
     import zipfile
     
     if not os.path.exists(env.TMP + 'NFO'):
@@ -3162,7 +3163,7 @@ def Trailer(p1):
                     Log('Ha habido un problema procesando el trailer: ' + p1)
                     os.remove(env.TMP + 'NFO')
                     return ''
-            except zipfile.BadZipFile as e:
+            except zipfile.BadZipFile:
                 Log('Ha habido un problema descomprimiendo el supuesto zip: ' + p1, True)
                 return ''
         else:
