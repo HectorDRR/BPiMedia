@@ -452,7 +452,7 @@ class Pelicula:
                         os.remove(env.TMP + 'NFO')
                         return ''
                 except zipfile.BadZipFile as e:
-                    Log('2: Ha habido un problema descomprimiendo el supuesto zip: ' + e + self.Todo, Fichero = env.PLANTILLAS + 'NoNfo.log')
+                    Log(f'2: Ha habido un problema descomprimiendo el supuesto zip: {e} {self.Todo}', Fichero = env.PLANTILLAS + 'NoNfo.log')
                     return ''
                 ruta = env.TMP + 'NFO'
             else:
@@ -467,7 +467,7 @@ class Pelicula:
             Log('4: No se ha encontrado el ' + P1 + ' de "' + self.Todo + '", ' + e, Fichero = env.PLANTILLAS + 'NoNfo.log')
             return ''
         except IndexError as e:
-            Log('5: Ha habido un problem con el ' + P1 + ' de "' + self.Todo + '", ' + str(e), Fichero = env.PLANTILLAS + 'NoNfo.log')
+            Log(f'5: Ha habido un problem con el {P1} de "{self.Todo}", {e}', Fichero = env.PLANTILLAS + 'NoNfo.log')
             return ''
         xmlParametro = xmlParametro.replace('<' + P1 + '>', '').replace('</' + P1 + '>', '')
         if ruta == env.TMP + 'NFO':
@@ -1399,7 +1399,7 @@ def CreaWeb(p1 = 'Ultimas', Pocas = 0, Debug = False):
     tfaltan = []
     # Si estamos en el curro, y estamos generando el correo, tenemos que añadir toda la URL
     if env.SISTEMA == 'Windows':
-        url = 'http://cine.no-ip.info/'
+        url = 'https://cine.no-ip.info/'
     # Guardaremos el índice en una lista para añadirlo a posteriori
     indice = '<p align="center">'
     cuerpo = ['<table width="95%" align="center" style="border-spacing:2px 10px"><tr>']
@@ -1985,7 +1985,7 @@ def GuardaHD(Disco = 'HD-TB-8-1'):
     CreaPaginas()
     # Limpiamos las carátulas que hayan quedado en la carpeta env.HD
     LimpiaHD()
-    GuardaLibre(env.HDG)
+    #GuardaLibre(env.HDG)
     # Paramos el disco duro por si lo hemos dejado copiando. El parámetro -Sx establece en x*5 segundos el tiempo de inactividad antes de pararse
     os.system('sync &&cd &&sudo umount /mnt/HD &&sudo hdparm -y /dev/disk/by-label/' + Disco)
     return
@@ -2024,7 +2024,7 @@ def GuardaLibre(Ruta):
 
 def GuardaPelis(Cuales, Que):
     """ Macro para guardar las pelis adultas o infantiles en los discos duros correspondientes
-        Cuales se correponde con el tipo de Pelis, por ahora solo las normales y las infantiles
+        Cuales se corresponde con el tipo de Pelis, por ahora solo las normales y las infantiles
         Que se corresponde con los permisos que las distinguen, ?66 en el caso de las pelis y 
         ?46 en el caso de las infantiles por lo que solo mandamos el permiso de grupo, 6 o 4.
         Como los discos ya tienen una gran capacidad (8 TB) las clasificamos en carpetas por la 
@@ -2032,7 +2032,7 @@ def GuardaPelis(Cuales, Que):
     """
     # Encendemos el led
     os.system('/home/hector/bin/ledonoff heartbeat')
-    # Generamos la lista de las pelis que no se han pasado copiado rw?r?-rw-
+    # Generamos la lista de las pelis que no se han copiado rw?r?-rw-
     # Más adelante, aprenderemos como hacer esto desde el mismo Python sin tener que recurrir al find
     salida = os.popen("find . -type f -name '*.mkv' -perm 7" + Que + "6 -o -perm 6" + Que + "6 ! -name '*.part'").read()
     # Convertimos en lista y quitamos elementos nulos
@@ -2868,7 +2868,8 @@ def Renombra(Viejo, Nuevo):
 
 def RenPeli(P1, P2):
     """Se encarga de renombrar todos los ficheros relacionados con una película para el caso de que haya habido algún 
-    problema con su nomenclatura
+    problema con su nomenclatura. Preferiblemente usar el nombre sin extensión, de manera que así de un plumazo cambie
+    el nombre a carátula y peli en HD, por ejemplo.
     P1 = Nombre erróneo
     P2 = Nombre correcto
     """
@@ -3026,7 +3027,7 @@ def Temperatura(Cual = 'Temperatura'):
     # Lo pasamos a horas y minutos
     activa = f'{activa // 60:02}:{activa % 60:02}'
     # Obtenemos la mínima, media y máxima del mes en curso
-    medias = list(cursor.execute("select Min(Temperatura), round(Avg(Temperatura)), Max(Temperatura) from placa where fecha > '" + fecha.strftime('%Y-%m-00') + "' and fecha like '%%18:3%%'"))[0]
+    medias = list(cursor.execute("select Min(Temperatura), round(Avg(Temperatura),1), Max(Temperatura) from placa where fecha > '" + fecha.strftime('%Y-%m-00') + "' and fecha like '%%18:3%%'"))[0]
     # El primer día de cada mes hasta pasadas las 18.30 obtenemos un valor None que nos descalabra la lectura desde la página web, así que lo cambiamos a 0
     if medias[0] == None:
         medias = [0, 0, 0]

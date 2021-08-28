@@ -12,10 +12,17 @@ do
 	if [ $? -eq 1 ]
 	then
 		echo $(date) $f cascado, lo arrancamos de nuevo>>/tmp/mulacaida.txt
+		# Hay veces que casca el amuled pero no el amuleweb y por eso el servicio no arranca
+		if [ $f -eq 'amuled' ]
+		then
+			pkill -9 amule
+		fi
 		${lista[$f]}
 	fi
 done
 # Hay un chequeo extra por el amule que algunas veces no desparece el proceso pero está inactivo
+# Esperamos unos segundos a que arranque
+sleep 5
 tail -5 /mnt/e/.aMule/logfile|grep -e 'Todos los archivos' -e 'All PartFiles' -e 'Asio Sockets'
 if [ $? -eq 0 ]
 	then
