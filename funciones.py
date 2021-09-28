@@ -1173,69 +1173,6 @@ def BP(Peli, Comentario):
         Log('Borramos ' + Peli + ' con el comentario: ' + Comentario, True)
     return
 
-def CuantaCarga():
-    """ Función para extraer cuanto tiempo hemos cargado el coche de la FV para control estadístico
-        Obtenemos tanto el tiempo por mes como el total acumulado
-        Esta función la ejecutaremos una vez al mes para generar los datos para la gráfica en la web
-        La llamaremos desde la misma que generamos otros gráficos mensuales
-    """
-    import datetime
-    # Extraemos del log (venus:/home/root/lib/Carga.log) las líneas que contienen el resumen diario
-    lineas = os.popen("ssh -l root venus grep estado /home/root/lib/Carga.log |cut -d ' ' -f 1,9,12").read().split('\n')
-    # Nos cepillamos la última línea vacía
-    lineas.remove('')
-    # Separamos fecha, minutos y segundos
-    lineas = [x.split() for x in lineas]
-    # Aunque las llamamos horas y minutos, realmente son minutos y segundos, de ahí que después dividamos por 60
-    horas = minutos = horasm = minutosm = 0
-    # Cogemos el mes inicial para saber cuando cambiamos
-    mes = lineas[0][0][3:10]
-    grafica = []
-    # Sumamos y obtenemos horas y minutos
-    for f in lineas:
-        # Si cambiamos de mes imprimimos, acumulamos y reiniciamos variables
-        if not mes == f[0][3:10]:
-            # Mostramos el subtotal mensual
-            print('El Coche se ha cargado %s:%s horas de la FV el %s' % (round((round(minutosm / 60) + horasm) / 60), (round(minutosm / 60) + horasm) % 60, mes))
-            # Convertimos la fecha a formato yankee para que la pueda tratar el gráfico
-            fecha = datetime.datetime.strptime(f'01/{mes}','%d/%m/%Y')
-            # Vamos rellenando la lista para el CSV
-            grafica.append([fecha.strftime('%Y-%m-%d'), round(minutosm / 60) + horasm])
-            # Vamos totalizando
-            minutos += minutosm
-            horas += horasm
-            minutosm = horasm = 0
-            # Cambiamos el mes
-            mes = f[0][3:10]
-        # Acumulamos para procesar el mes
-        minutosm += int(f[2])
-        horasm += int(f[1])
-    # Siempre se nos quedará colgado el último mes
-    print('El Coche se ha cargado %s:%s horas de la FV el %s' % (round((round(minutosm / 60) + horasm) / 60), (round(minutosm / 60) + horasm) % 60, mes))
-    # Volvemos a convertir la fecha. Habrá que intentar hacerlo de una manera más elegante
-    fecha = datetime.datetime.strptime(f'01/{mes}','%d/%m/%Y')
-    # Añadimos el último total mensual
-    grafica.append([fecha.strftime('%Y-%m-%d'), round(minutosm / 60) + horasm])
-    # Totalizamos
-    minutos += minutosm
-    horas += horasm
-    # Pasamos los minutos a horas y los segundos a minutos
-    horas = round((round(minutos / 60) + horas) / 60)
-    # Nos quedamos con los minutos sobrantes
-    minutos = (round(minutos / 60) + horas) % 60
-    # La fecha actual para mostrar al final de la página
-    actual = datetime.datetime.now().strftime('%c')
-    # Imprimimos el total
-    print('El Coche se ha cargado %s:%s horas de la FV desde Septiembre del 2020' % (horas, minutos))
-    # Generamos el CSV
-    with open(env.WEB + 'cargaFV.csv','w') as cargaFV:
-        cargaFV.write('Mes,Tiempo\n')
-        for f in grafica:
-            cargaFV.write(f'{f[0]},{f[1]}\n')
-    # Generamos el JSON para rellenar la página
-    with open(env.WEB + 'cargaFV.txt','w') as cargaFV:
-        cargaFV.write(f'{{"Total":"{horas}:{minutos}", "Actualizado":"{actual}"}}')
-
 def Clasifica():
     """ Función para pasar las películas de los discos a carpetas organizadas alfabéticamente por la primera letra 
     ya que con discos tan grandes es un suplicio buscarlas con el WDTV.
@@ -1633,6 +1570,69 @@ def CreaWebO(Titulo = 'Ultimas', Filtro = '', Modo = False, Debug = False):
     with open(env.WEB + Titulo + '.html', 'w', encoding='utf-8-sig') as file:
         for f in web:
             file.writelines(f)
+
+def CuantaCarga():
+    """ Función para extraer cuanto tiempo hemos cargado el coche de la FV para control estadístico
+        Obtenemos tanto el tiempo por mes como el total acumulado
+        Esta función la ejecutaremos una vez al mes para generar los datos para la gráfica en la web
+        La llamaremos desde la misma que generamos otros gráficos mensuales
+    """
+    import datetime
+    # Extraemos del log (venus:/home/root/lib/Carga.log) las líneas que contienen el resumen diario
+    lineas = os.popen("ssh -l root venus grep estado /home/root/lib/Carga.log |cut -d ' ' -f 1,9,12").read().split('\n')
+    # Nos cepillamos la última línea vacía
+    lineas.remove('')
+    # Separamos fecha, minutos y segundos
+    lineas = [x.split() for x in lineas]
+    # Aunque las llamamos horas y minutos, realmente son minutos y segundos, de ahí que después dividamos por 60
+    horas = minutos = horasm = minutosm = 0
+    # Cogemos el mes inicial para saber cuando cambiamos
+    mes = lineas[0][0][3:10]
+    grafica = []
+    # Sumamos y obtenemos horas y minutos
+    for f in lineas:
+        # Si cambiamos de mes imprimimos, acumulamos y reiniciamos variables
+        if not mes == f[0][3:10]:
+            # Mostramos el subtotal mensual
+            print('El Coche se ha cargado %s:%s horas de la FV el %s' % (round((round(minutosm / 60) + horasm) / 60), (round(minutosm / 60) + horasm) % 60, mes))
+            # Convertimos la fecha a formato yankee para que la pueda tratar el gráfico
+            fecha = datetime.datetime.strptime(f'01/{mes}','%d/%m/%Y')
+            # Vamos rellenando la lista para el CSV
+            grafica.append([fecha.strftime('%Y-%m-%d'), round(minutosm / 60) + horasm])
+            # Vamos totalizando
+            minutos += minutosm
+            horas += horasm
+            minutosm = horasm = 0
+            # Cambiamos el mes
+            mes = f[0][3:10]
+        # Acumulamos para procesar el mes
+        minutosm += int(f[2])
+        horasm += int(f[1])
+    # Siempre se nos quedará colgado el último mes
+    print('El Coche se ha cargado %s:%s horas de la FV el %s' % (round((round(minutosm / 60) + horasm) / 60), (round(minutosm / 60) + horasm) % 60, mes))
+    # Volvemos a convertir la fecha. Habrá que intentar hacerlo de una manera más elegante
+    fecha = datetime.datetime.strptime(f'01/{mes}','%d/%m/%Y')
+    # Añadimos el último total mensual
+    grafica.append([fecha.strftime('%Y-%m-%d'), round(minutosm / 60) + horasm])
+    # Totalizamos
+    minutos += minutosm
+    horas += horasm
+    # Pasamos los minutos a horas y los segundos a minutos
+    horas = round((round(minutos / 60) + horas) / 60)
+    # Nos quedamos con los minutos sobrantes
+    minutos = (round(minutos / 60) + horas) % 60
+    # La fecha actual para mostrar al final de la página
+    actual = datetime.datetime.now().strftime('%c')
+    # Imprimimos el total
+    print('El Coche se ha cargado %s:%s horas de la FV desde Septiembre del 2020' % (horas, minutos))
+    # Generamos el CSV
+    with open(env.WEB + 'cargaFV.csv','w') as cargaFV:
+        cargaFV.write('Mes,Tiempo\n')
+        for f in grafica:
+            cargaFV.write(f'{f[0]},{f[1]}\n')
+    # Generamos el JSON para rellenar la página
+    with open(env.WEB + 'cargaFV.txt','w') as cargaFV:
+        cargaFV.write(f'{{"Total":"{horas}:{minutos}", "Actualizado":"{actual}"}}')
 
 def Discolleno():
     """Es lanzada cuando el emule detecta que queda 5 GB o menos libre.
@@ -3331,13 +3331,13 @@ def Traspasa(Copio = 0, Monta = 0):
     os.system('/home/hector/bin/ledonoff none')
     return
 
-def Ultimas():
+def Ultimas(Debug = False):
     """ Para meter en la BD las pelis en Ultimas y generar la página web
     """
     # Nos pasamos a la carpeta de las últimas y obtenemos la lista
     os.chdir(env.HD)
     lista = ObtenLista(1)
-    GeneraListaBD('Ultimas', lista)
+    GeneraListaBD('Ultimas', lista, Debug=Debug)
     CreaWebO(Modo = True)
     
 if __name__ == "__main__":

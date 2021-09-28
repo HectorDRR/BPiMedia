@@ -12,7 +12,7 @@ fi
 Estado_Placa
 echo Temperatura del agua: $ACSº
 echo Estado de la placa: $Placa
-for f in Consumo FV Bateria 
+for f in Consumo FV Bateria Red
 do
 	vari=$(cat /tmp/$f)
 	vari=$(json "$vari")
