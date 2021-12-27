@@ -23,7 +23,7 @@ function Estado_Placa {
 }
 function procesos {
 	# Comprueba la existencia de los procesos normales del sistema
-	for f in amul transmiss minidlna smb vsftpd noip2 Botones.py; do
+	for f in amul transmiss minidlna smb vsftpd noip2; do
         	pgrep -af $f
         	if [ $? -eq 1 ]
                 	then

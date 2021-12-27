@@ -452,7 +452,10 @@ class Pelicula:
                         os.remove(env.TMP + 'NFO')
                         return ''
                 except zipfile.BadZipFile as e:
-                    Log(f'2: Ha habido un problema descomprimiendo el supuesto zip: {e} {self.Todo}', Fichero = env.PLANTILLAS + 'NoNfo.log')
+                    Log(f'2: Ha habido un problema descomprimiendo el zip: {e} {self.Todo}', Fichero = env.PLANTILLAS + 'NoNfo.log')
+                    return ''
+                except KeyError as e:
+                    Log(f'2: Ha habido un problema descomprimiendo el zip: {e} {self.Todo}', Fichero = env.PLANTILLAS + 'NoNfo.log')
                     return ''
                 ruta = env.TMP + 'NFO'
             else:
@@ -2040,7 +2043,7 @@ def GuardaPelis(Cuales, Que):
     # Quitamos el './' inicial
     lista = [x[2:] for x in lista]
     print(lista, env.HDG + Cuales)
-    # Cogeremos cada peli y la copiaremos al disco que definiremos como GHD hasta que se llene y pasemos a otros
+    # Cogeremos cada peli y la copiaremos al disco que definiremos como HDG hasta que se llene y pasemos a otros
     for peli in lista:
         Log('Copiamos la peli: ' + peli, True)
         if not Queda(peli, env.HDG + Cuales):
