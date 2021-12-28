@@ -10,9 +10,6 @@ function Amule {
 # Generamos la lista de elementos a usar con un array 'asociativo' en bash
 declare -A lista
 lista=([transmission-da]='sudo service transmission-daemon start' [amuled]='sudo service amule-daemon restart' [vsftpd]='sudo service vsftpd start' [noip2]='sudo noip2' [minidlnad]='/usr/local/sbin/minidlnad')
-#[Botones.py]='sudo screen -d -m -S Botones -h 20000 /home/hector/bin/boton.sh'
-# Extraemos el Cargacoche al haberlo migrado a Python2 e implementado en el Venus GX
-#[CargaCoche]='screen -d -m -S CargaCoche -h 20000 /home/hector/bin/CargaCoche.py'
 # Ahora hacemos el bucle para comprobar los procesos
 for f in "${!lista[@]}"
 do
@@ -30,17 +27,18 @@ do
 done
 # Hay un chequeo extra por el amule que algunas veces no desparece el proceso pero está inactivo
 # Esperamos unos segundos a que arranque
-sleep 5
-tail -5 /mnt/e/.aMule/logfile|grep -e 'Todos los archivos' -e 'All PartFiles' -e 'Asio Sockets'
-if [ $? -eq 0 ]
-	then
-        Amule
-fi
+#sleep 5
+#tail -5 /mnt/e/.aMule/logfile|grep -e 'Todos los archivos' -e 'All PartFiles' -e 'Asio Sockets'
+#if [ $? -eq 0 ]
+#	then
+#        tail -5 /mnt/e/.aMule/logfile >>/tmp/mulacaida.txt
+#        Amule
+#fi
 # Y hay veces que sencillamente se queda frito sin dar ningún mensaje. Así que le hacemos hacer 
 # algo para comprobar en el log que sigue vivo
-compartidos
-sleep 2
-if [[ $(tail -1 /mnt/e/.aMule/logfile|cut -c 13-17) != $(date|cut -c 17-21) ]]
+amulecmd -c 'show dl'
+if [[ $(tail -1 /mnt/e/.aMule/logfile|cut -c 13-16) != $(date|cut -c 17-20) ]]
     then
+        echo $(tail -1 /mnt/e/.aMule/logfile|cut -c 13-16), $(date|cut -c 17-20)>>/tmp/mulacaida.txt
         Amule
 fi
