@@ -3030,7 +3030,7 @@ def Temperatura(Cual = 'Temperatura'):
     # Lo pasamos a horas y minutos
     activa = f'{activa // 60:02}:{activa % 60:02}'
     # Obtenemos la mínima, media y máxima del mes en curso. La media a las 17:0* que es cuando activamos la placa en Invierno aprovechando el periodo llano
-    medias = list(cursor.execute("select Min(Temperatura), round(Avg(Temperatura),1), Max(Temperatura) from placa where fecha > '" + fecha.strftime('%Y-%m-00') + "' and fecha like '%%17:0%%'"))[0]
+    medias = list(cursor.execute("select Min(Temperatura), round(Avg(Temperatura),1), Max(Temperatura) from placa where fecha > '" + fecha.strftime('%Y-%m-00') + "' and fecha like '%% 17:0%%'"))[0]
     # El primer día de cada mes hasta pasadas las 17.00 obtenemos un valor None que nos descalabra la lectura desde la página web, así que lo cambiamos a 0
     if medias[0] == None:
         medias = [0, 0, 0]
