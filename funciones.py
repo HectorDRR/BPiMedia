@@ -3029,9 +3029,9 @@ def Temperatura(Cual = 'Temperatura'):
     activa = list(cursor.execute("select count(Encendido)*5 from placa where encendido=1 and fecha > '" + fecha.strftime('%Y-%m-00') + "'"))[0][0]
     # Lo pasamos a horas y minutos
     activa = f'{activa // 60:02}:{activa % 60:02}'
-    # Obtenemos la mínima, media y máxima del mes en curso
-    medias = list(cursor.execute("select Min(Temperatura), round(Avg(Temperatura),1), Max(Temperatura) from placa where fecha > '" + fecha.strftime('%Y-%m-00') + "' and fecha like '%%18:3%%'"))[0]
-    # El primer día de cada mes hasta pasadas las 18.30 obtenemos un valor None que nos descalabra la lectura desde la página web, así que lo cambiamos a 0
+    # Obtenemos la mínima, media y máxima del mes en curso. La media a las 17:0* que es cuando activamos la placa en Invierno aprovechando el periodo llano
+    medias = list(cursor.execute("select Min(Temperatura), round(Avg(Temperatura),1), Max(Temperatura) from placa where fecha > '" + fecha.strftime('%Y-%m-00') + "' and fecha like '%%17:0%%'"))[0]
+    # El primer día de cada mes hasta pasadas las 17.00 obtenemos un valor None que nos descalabra la lectura desde la página web, así que lo cambiamos a 0
     if medias[0] == None:
         medias = [0, 0, 0]
     # Retrocedemos una semana
@@ -3057,7 +3057,7 @@ def Temperatura(Cual = 'Temperatura'):
     return
 
 def Temperatura_Anual(Debug = False):
-    """ Se encarga de crear una gráfica con la temperatura mínima, media y máxima del agua a las 18:000 en la placa solar de
+    """ Se encarga de crear una gráfica con la temperatura mínima, media y máxima del agua a las 17:00 en la placa solar de
         cada mes y también el tiempo que ha estado encendida desde que tenemos datos.
     """
     import sqlite3, datetime, dateutil.relativedelta
@@ -3073,8 +3073,8 @@ def Temperatura_Anual(Debug = False):
     # Limpiamos para que no se nos quede el primer elemento vacío y podamos meterla en el bucle
     Valores.clear()
     while fecha.strftime('%Y%m') < fechafinal.strftime('%Y%m'):
-        # Obtenemos la Tª mínima, media y máxima a las 18:0%
-        Valores.append(list(cursor.execute("select  Min(Temperatura), Round(Avg(Temperatura),1), Max(Temperatura) from placa where fecha like '" + fecha.strftime('%Y-%m-__ 18:0%%') + "'"))[0])
+        # Obtenemos la Tª mínima, media y máxima a las 17:0%
+        Valores.append(list(cursor.execute("select  Min(Temperatura), Round(Avg(Temperatura),1), Max(Temperatura) from placa where fecha like '" + fecha.strftime('%Y-%m-__ 17:0%%') + "'"))[0])
         # Obtenemos cuantos minutos ha estado encedida la placa cada mes
         Valores[len(Valores)-1] = Valores[len(Valores)-1], list(cursor.execute("select count(Encendido)*5 from placa where encendido=1 and fecha like '" + fecha.strftime('%Y-%m-%%') + "'"))[0][0], fecha.strftime('%Y%m15')
         # Añadimos un mes a la fecha inicial

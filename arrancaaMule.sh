@@ -35,10 +35,11 @@ done
 #        Amule
 #fi
 # Y hay veces que sencillamente se queda frito sin dar ningún mensaje. Así que le hacemos hacer 
-# algo para comprobar en el log que sigue vivo
+# algo para comprobar en el log que sigue vivo. Para asegurarnos de que los campos no se mueven 
+# usamos el cut primero basado en campos en vez de en caracteres para después extraer solo los 4 que nos importan
 amulecmd -c 'show dl'
-if [[ $(tail -1 /mnt/e/.aMule/logfile|cut -c 13-16) != $(date|cut -c 17-20) ]]
+if [[ $(tail -1 /mnt/e/.aMule/logfile|cut -f 3 -d ' '|cut -c 1-4) != $(date|cut -f 5 -d ' '|cut -c 1-4) ]]
     then
-        echo $(tail -1 /mnt/e/.aMule/logfile|cut -c 13-16), $(date|cut -c 17-20)>>/tmp/mulacaida.txt
+        echo $(tail -1 /mnt/e/.aMule/logfile|cut -f 3 -d ' '|cut -c 1-4), $(date|cut -f 5 -d ' '|cut -c 1-4)>>/tmp/mulacaida.txt
         Amule
 fi
