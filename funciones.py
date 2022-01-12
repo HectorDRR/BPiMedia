@@ -1725,11 +1725,12 @@ def Fotos(Debug = '0', prefijo = ''):
     """
     Función para procesar las fotos descargadas del Google Photos a través del Google TakeOut y tener 
     nuestra propia copia de seguridad.
+    Partimos de poner las fotos en el raíz de cada años para procesarlas desde allí.
     Los primeros años los teníamos replicado en el Drive, hasta el 2019, y guardaban esa organización, 
-    por mes. Los extraídos del TakeOut están solo separados por año
+    por mes. Los extraídos del TakeOut están solo separados por año.
     Primero solo vamos a proceder a mover los ficheros a la carpeta de su mes correspondiente para mantener 
-    la misma organización que había anteriormente
-    Hay algunas fotos de Effects o algunas que se editan que aparecen como  '-ha editado' que no tienen JSON
+    la misma organización que había anteriormente.
+    Hay algunas fotos de Effects o algunas que se editan que aparecen como  '-ha editado' que no tienen JSON.
     Así mismo parece haber problema con las fotos con () que por alguna razón los cambia de sitio en el json, por ejemplo:
     image(4).jpg
     image.jpg(4).json
@@ -1770,13 +1771,15 @@ def Fotos(Debug = '0', prefijo = ''):
             logging.debug(f'Movemos {g} a su carpeta {mes}')
             os.rename(g, f'{mes}/{g}')
     # Hacemos limpieza eliminando las sheets de las películas
-    print('¿Deseas borrar las sheets de las películas (*mkv*)? (s/n)')
-    print(glob.glob('*mkv*'))
-    p = input()
-    if p == "s":
-        os.remove('*mkv*')
-    else:
-        logging.info('No eliminamos nada')
+    lista = (glob.glob('*mkv*'))
+    if len(lista) > 0:
+        print(lista)
+        print('¿Deseas borrar las sheets de las películas (*mkv*)? (s/n)')
+        p = input()
+        if p == "s":
+            for f in lista:
+                os.remove(f)
+            logging.info('Elimnamos las carátulas y sheets')
     # Una vez hemos terminado con las fáciles, procedemos a tratar los que no incluyen fecha en el nombre sino dentro del JSON
     logging.info('Procesamos los JSON de las que han quedado')
     lista = glob.glob('*.json')
@@ -1788,7 +1791,7 @@ def Fotos(Debug = '0', prefijo = ''):
     for f in lista:
         # Importamos el json
         fecha = json.load(open(f,'r'))['photoTakenTime']['formatted']
-        faño = fecha.split()[2]
+        faño = fecha.split()[2][0:-1]
         # Nos quedamos solo con el mes y cogemos solo 3 caracteres puesto que por ejemplo en Septiembre se salta los cánones y pone sept
         mes = datetime.datetime.strptime(fecha.split()[1][:3],'%b').month
         # Rellenamos con 0 el mes
