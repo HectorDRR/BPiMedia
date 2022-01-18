@@ -1779,7 +1779,7 @@ def Fotos(Debug = '0', prefijo = ''):
         if p == "s":
             for f in lista:
                 os.remove(f)
-            logging.info('Elimnamos las carátulas y sheets')
+            logging.info('Eliminamos las carátulas y sheets')
     # Una vez hemos terminado con las fáciles, procedemos a tratar los que no incluyen fecha en el nombre sino dentro del JSON
     logging.info('Procesamos los JSON de las que han quedado')
     lista = glob.glob('*.json')
@@ -3173,6 +3173,9 @@ def Trailer(p1):
             except zipfile.BadZipFile:
                 Log('Ha habido un problema descomprimiendo el supuesto zip: ' + p1, True)
                 return ''
+            except KeyError:
+                Log('Ha habido un problema descomprimiendo el supuesto zip: ' + p1, True)
+                return ''
         else:
             Log('No encontramos el fichero NFO para ' + p1)
             return ''
@@ -3186,7 +3189,7 @@ def Trailer(p1):
         os.remove(env.TMP + 'NFO')
         return ''
     except IndexError as e:
-        Log('Ha habido un problem con el trailer: ' + p1 + ', ' + str(e), Fichero = env.Plantillas + 'NoTrailer.log')
+        Log('Ha habido un problem con el trailer: ' + p1 + ', ' + str(e), Fichero = env.PLANTILLAS + 'NoTrailer.log')
         os.remove(env.TMP + 'NFO')
         return ''
     xmlTrailer = xmlTrailer.replace('<trailer>', '').replace('</trailer>', '')
@@ -3345,6 +3348,7 @@ def Ultimas(Debug = False):
     lista = ObtenLista(1)
     GeneraListaBD('Ultimas', lista, Debug=Debug)
     CreaWebO(Modo = True)
+    LimpiaHD()
     
 if __name__ == "__main__":
     """ En caso de que se ejecute desde la línea de comando, llamamos a la función dada como parámetro 1

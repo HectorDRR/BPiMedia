@@ -23,7 +23,7 @@ function Estado_Placa {
 }
 function procesos {
 	# Comprueba la existencia de los procesos normales del sistema
-	for f in amul transmiss minidlna smb vsftpd noip2 ddclient; do
+	for f in amul transmiss minidlna smb vsftpd ddclient; do
         	pgrep -af $f
         	if [ $? -eq 1 ]
                 	then
