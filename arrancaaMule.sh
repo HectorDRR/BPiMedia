@@ -9,7 +9,7 @@ function Amule {
 }    
 # Generamos la lista de elementos a usar con un array 'asociativo' en bash
 declare -A lista
-lista=([transmission-da]='sudo service transmission-daemon start' [amuled]='sudo service amule-daemon restart' [vsftpd]='sudo service vsftpd start' [noip2]='sudo noip2' [minidlnad]='/usr/local/sbin/minidlnad')
+lista=([transmission-da]='sudo service transmission-daemon start' [amuled]='sudo service amule-daemon restart' [vsftpd]='sudo service vsftpd start' [minidlnad]='/usr/local/sbin/minidlnad')
 # Ahora hacemos el bucle para comprobar los procesos
 for f in "${!lista[@]}"
 do
