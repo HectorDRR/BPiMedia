@@ -5,7 +5,7 @@ free -h
 tem=$(cat /sys/class/thermal/thermal_zone0/temp)
 echo Temperatura del Odroid: ${tem:0:2}º
 if [ $1p == sp ];
-	then Series;
+	then Series|cut -c 1-5,21-;
 	exit;
 fi
 # Obtenemos estado y temperatura de la placa
@@ -19,11 +19,13 @@ do
 	vari=$(LC_ALL=C printf "%.*f\n" 2 "$vari")
 	echo $f: $vari
 done
+echo Carga de la SAI: `upsc MiSAI@localhost ups.load > /dev/stdout 2> /dev/null`%
 procesos
 # Vemos cuanto espacio queda libre para ponerlo en otro color en caso de que haya poco
 # Usamos el printf para conventirlo a entero redondeando puesto que el bash no admite comparar floats
 printf -v tam '%.0f' $(df -h /mnt/e|tail -1|cut -c 29-31)
 echo .
+read p
 if [ $tam -lt 10 ] 
 	then echo -e "Solo quedan \e[31m$tam\e[0m GB libres en /mnt/e"
 	else echo -e "Quedan \e[92m$tam \e[0m GB libres en /mnt/e"
@@ -42,7 +44,7 @@ read p
 ls -lhst /mnt/e/Series
 echo Series pendientes de copiar
 read p
-Series
+Series | cut -c 1-5,21-
 echo El log del aMule
 read p
 tail -20 /mnt/e/.aMule/logfile
@@ -51,7 +53,7 @@ read p
 sudo grep transmission /var/log/syslog|tail -30
 echo El log del minidlna y del traspasa
 read p
-tail -15 /mnt/e/.mini/minidlna.log
+tail -15 /mnt/e/.mini/minidlna.log|grep -v 1078
 tail -20 /mnt/e/.mini/milog.txt
 echo Lo que hay en otros
 read p
