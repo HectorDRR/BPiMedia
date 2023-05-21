@@ -1963,7 +1963,7 @@ def GeneraListaBD(Listado, Pelis, Serie = False, Debug = False):
     bd.close()
     return
 
-def GuardaHD(Disco = 'HD-TB-8-1'):
+def GuardaHD(Disco = 'HD-TB6-1'):
     """ Se encarga de pasar las películas a los discos externos USB para su almacenamiento
         Empezaremos solo por las pelis por ser más sencillo su tratamiento. Tenemos que tener 
         montado el disco en la ruta anterior a la que señala la variable HDG (/mnt/HD)

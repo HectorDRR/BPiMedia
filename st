@@ -44,13 +44,13 @@ read p
 ls -lhst /mnt/e/Series
 echo Series pendientes de copiar
 read p
-Series | cut -c 1-5,21-
+Series | cut -c 1-6,21-
 echo El log del aMule
 read p
 tail -20 /mnt/e/.aMule/logfile
 echo El log del Transmission
 read p
-sudo grep transmission /var/log/syslog|tail -30
+sudo grep transmission /var/log/syslog|grep -v DHT|tail -30
 echo El log del minidlna y del traspasa
 read p
 tail -15 /mnt/e/.mini/minidlna.log|grep -v 1078
@@ -60,7 +60,7 @@ read p
 ls -lhst /mnt/e/otros
 echo El transmission
 read p
-transmission-remote localhost:8964 -l
+transmission-remote localhost:1111 -l
 echo El Amule
 read p
 amulecmd -c "show DL"
@@ -68,7 +68,7 @@ echo El Log del sistema
 dmesg -T|grep -v 'vidioc_try_fmt:379'|tail -30
 echo el Syslog
 read p
-sudo tail -40 /var/log/syslog|grep -v CRON
+sudo tail -140 /var/log/syslog|grep -v CRON|grep -v DHT|tail -40
 [ -f /var/log/placa.log ] && tail /var/log/placa.log
 [ -f /tmp/mulacaida.txt ] && cat /tmp/mulacaida.txt
 [ -f /tmp/ftpcaido.txt ] && cat /tmp/ftpcaido.txt

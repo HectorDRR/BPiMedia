@@ -12,10 +12,9 @@ if [ $? -eq 1 ]
 	then
 		cp /tmp/crontab.txt /home/hector/bin/crontab.txt
 fi
-for f in /home/hector/bin /mnt/f /mnt/e/util /mnt/e/.mini /home/hector/CargaCoche /etc; do 
+for f in /home/hector/bin /mnt/f /mnt/e/util /mnt/e/.mini /home/hector/CargaCoche /etc/default; do 
 	rclone sync $f Drive:Odroid/${f##*/} --exclude "art_cache/**" --exclude "__pycache__/*" --exclude ".git/**" -v --log-file /tmp/salcopias.txt
 done
+# Copiamos solo los ficheros .conf que haya en /etc
+rclone copy --include "*.conf" /etc/ Drive:Odroid/etc -v --log-file /tmp/salcopias.txt --max-depth 1 --skip-links
 echo `date +%d/%m/%Y\ %H:%M:%S` [copias.sh] Terminada la copia al Google drive>>/mnt/e/.mini/milog.txt
-#for f in /home/hector/bin /mnt/f /mnt/e/util /mnt/e/.mini; do 
-#	rclone size Drive:Odroid/${f##*/}>>/mnt/e/.mini/milog.txt
-#done
