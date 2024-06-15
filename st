@@ -33,11 +33,11 @@ fi
 echo .
 cat /mnt/e/util/quedan.txt
 echo HD pendiente pasar a Metal
-find /mnt/e/HD/ -maxdepth 1 -name '*.mkv' \( -perm 666 -o -perm 646 -o -perm 677 \) -exec du -ch '{}' +
+find /mnt/e/HD/ -maxdepth 1 \( -name '*.mkv' -o -name '*.mp4' -o -name '*.avi' \) \( -perm 666 -o -perm 646 -o -perm 677 \) -exec du -ch '{}' +
 echo HD pendiente pasar a disco
-find /mnt/e/HD/ -maxdepth 1 -name '*.mkv' \( -perm 666 -o -perm 766 ! -name '*.part' \) -exec du -ch '{}' +
+find /mnt/e/HD/ -maxdepth 1 \( -name '*.mkv' -o -name '*.mp4' -o -name '*.avi' \) \( -perm 666 -o -perm 766 ! -name '*.part' \) -exec du -ch '{}' +
 echo HD Infantiles pendientes de pasar a disco
-find /mnt/e/HD/ -maxdepth 1 -name '*.mkv'  \( -perm 746 -o -perm 646 ! -name '*.part' \) -exec du -ch '{}' +
+find /mnt/e/HD/ -maxdepth 1 \( -name '*.mkv' -o -name '*.mp4' -o -name '*.avi' \) \( -perm 746 -o -perm 646 ! -name '*.part' \) -exec du -ch '{}' +
 ls -lhst /mnt/e/HD|grep drwx
 echo Ahora las Series
 read p
@@ -48,9 +48,9 @@ Series | cut -c 1-6,21-
 echo El log del aMule
 read p
 tail -20 /mnt/e/.aMule/logfile
-echo El log del Transmission
-read p
-sudo grep transmission /var/log/syslog|grep -v DHT|tail -30
+# echo El log del Transmission
+# read p
+# sudo grep transmission /var/log/syslog|grep -v DHT|tail -30
 echo El log del minidlna y del traspasa
 read p
 tail -15 /mnt/e/.mini/minidlna.log|grep -v 1078
@@ -58,9 +58,9 @@ tail -20 /mnt/e/.mini/milog.txt
 echo Lo que hay en otros
 read p
 ls -lhst /mnt/e/otros
-echo El transmission
-read p
-transmission-remote localhost:1111 -l
+# echo El transmission
+# read p
+# transmission-remote localhost:1111 -l
 echo El Amule
 read p
 amulecmd -c "show DL"
@@ -72,6 +72,6 @@ sudo tail -140 /var/log/syslog|grep -v CRON|grep -v DHT|tail -40
 [ -f /var/log/placa.log ] && tail /var/log/placa.log
 [ -f /tmp/mulacaida.txt ] && cat /tmp/mulacaida.txt
 [ -f /tmp/ftpcaido.txt ] && cat /tmp/ftpcaido.txt
-echo la carga del coche
-read p
-ssh -l root venus tail -20 /home/root/lib/Carga.log
+# echo la carga del coche
+# read p
+# ssh -l root venus tail -20 /home/root/lib/Carga.log

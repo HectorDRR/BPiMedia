@@ -191,7 +191,7 @@ class Capitulo:
         self.FTP = FTP
         # Filtro para buscar donde está la numeración de la serie. Teniendo en cuenta que algunos capítutlos no tienen título
         # y viene un '.' directamente después del número del capítulo
-        pp = re.compile(' \d+x\d\d(?:-\d\d)?')
+        pp = re.compile(r' \d+x\d\d(?:-\d\d)?')
         result = pp.split(Todo)
         # Si obtenemos 2 pedazos al dividir la cadena siginifica que es una serie
         if len(result) > 1:
@@ -497,7 +497,7 @@ class Pelicula:
         if not self.Disco == 'Ultimas':
             linea = linea + '_' + self.Tipo
         if Normal:
-            linea = linea + '"><img src="caratulas/' + self.Todo[:-3] + 'jpg" \>'
+            linea = linea + '"><img src="caratulas/' + self.Todo[:-3] + r'jpg" \>'
         else:
             linea = linea + '" class="hover-lib" id="caratulas/' + self.Todo[:-3] + 'jpg">'
         linea = linea + '<br /><font size="-1">' + self.Todo + '</font></a>\n'
@@ -708,7 +708,7 @@ class SonoffTH:
     def Temperatura(self):
         """ Esta función obtiene la temperatura actual del sensor del SonOff.      
         """
-        return round(eval(self.MandaCurl('Status 10'))['StatusSNS']['DS18B20']['Temperature'])
+        return round(eval(self.MandaCurl('Status 10'))['StatusSNS']['WTS01']['Temperature'])
     
     @property
     def Mem2(self):
@@ -725,7 +725,7 @@ class SonoffTH:
             Log('Debug, self.mensaje: ' + str(self.mensaje))
         if 'StatusSNS' in self.mensaje:
             # Extraemos la temperatura
-            self.Temperatura = int(self.mensaje["StatusSNS"]["DS18B20"]["Temperature"])
+            self.Temperatura = int(self.mensaje["StatusSNS"]["WTS01"]["Temperature"])
         elif 'Power' in self.mensaje:
             # Extraemos el estado
             self.Estado = self.mensaje['Status']["Power"]
@@ -985,6 +985,8 @@ def BajaSeries(Batch = False, Debug = False):
     # Obtenemos la lista de películas pendientes de procesar
     listaremota = []
     ftp.retrlines('list *.mkv', callback=listaremota.append)
+    ftp.retrlines('list *.mp4', callback=listaremota.append)
+    ftp.retrlines('list *.avi', callback=listaremota.append)
     lista = []
     # Pendiente bajar también las infantiles que no se hayan bajado. Revisar que permisos tienen y como cambiarlos
     for f in listaremota:
@@ -1226,7 +1228,7 @@ def Copia():
         # Obtenemos le nombre de la carpeta que será el del zip
         carpeta = f[f.rfind('/') + 1:] + '.zip'
         # Generamos el zip en /tmp con los ficheros modificados en el último día
-        os.system('find . -maxdepth 1 -type f -mtime -1 -exec zip /tmp/' + carpeta + ' {} \;')
+        os.system('find . -maxdepth 1 -type f -mtime -1 -exec zip /tmp/' + carpeta + r' {} \;')
         # Si hay algo que copiar lo subimos por FTP a la carpeta del día en curso
         if os.path.exists('/tmp/' + carpeta):
             ftp.cwd(time.strftime('%a'))
@@ -1659,7 +1661,7 @@ def Divide(Serie):
     dividir la cadena devolvemos la Serie y el título del capítulo en una lista. Si no, devolvemos la
     cadena que nos mandaron
     """
-    pp = re.compile(' \d+x\d\d(?:-\d\d)?')
+    pp = re.compile(r' \d+x\d\d(?:-\d\d)?')
     Result = pp.split(Serie)
     #Si obtenemos 2 pedazos al dividir la cadena siginifica que es una serie
     if len(Result)>1:
@@ -1963,7 +1965,7 @@ def GeneraListaBD(Listado, Pelis, Serie = False, Debug = False):
     bd.close()
     return
 
-def GuardaHD(Disco = 'HD-TB6-1'):
+def GuardaHD(Disco = 'HD-TB4-1'):
     """ Se encarga de pasar las películas a los discos externos USB para su almacenamiento
         Empezaremos solo por las pelis por ser más sencillo su tratamiento. Tenemos que tener 
         montado el disco en la ruta anterior a la que señala la variable HDG (/mnt/HD)
@@ -2085,7 +2087,7 @@ def GuardaSeries(Ruta, deb = False):
     # Confirmamos que está montado el disco de destino, y si no, lo montamos usando el by-label por los problemas con el Stretch y el fstab
     while not os.path.exists(env.SERIESG + Ruta + '/Series/') and cuantos < 5:
             os.system('sudo mount /dev/disk/by-label/Series_' + Ruta[0] +'-' + Ruta[1] + ' ' + env.SERIESG + Ruta)
-            time.sleep(1)
+            time.sleep(2)
             cuantos += 1
     # Encendemos el led verde para mostrar que estamos copiando
     os.system('/home/hector/bin/ledonoff heartbeat')
@@ -2269,7 +2271,7 @@ def LimpiaHD():
     os.chdir(env.HD)
     lista = glob.glob('*.jpg')
     for f in lista:
-        if not os.path.exists(f[:-3] + 'mkv'):
+        if not (os.path.exists(f[:-3] + 'mkv') or os.path.exists(f[:-3] + 'mp4') or os.path.exists(f[:-3] + 'avi')):
             # Hacemos una lista con los ficheros a borrar por si hay además algún .tmp o .srt
             borra = glob.glob(f[:-3] + '*')
             for g in borra:
@@ -2344,7 +2346,7 @@ def LineaWeb(Peli, Normal = True):
     if not Peli[1] == 'Ultimas':
         linea = linea + '_' + Peli[2]
     if Normal:
-        linea = linea + '"><img src="caratulas/' + Peli[0][:-3] + 'jpg" \>'
+        linea = linea + '"><img src="caratulas/' + Peli[0][:-3] + r'jpg" \>'
     else:
         linea = linea + '" class="hover-lib" id="caratulas/' + Peli[0][:-3] + 'jpg">'
     linea = linea + '<br /><font size="-1">' + Peli[0] + '</font></a>\n'
@@ -2687,8 +2689,8 @@ def PasaaBD(Fichero = '/var/log/placa.log', Debug = False):
             mensaje = eval(f[f.index('{'):])
         except:
             continue
-        if 'DS18B20' in mensaje:
-            Temperatura = float(mensaje['DS18B20']['Temperature'])
+        if 'WTS01' in mensaje:
+            Temperatura = float(mensaje['WTS01']['Temperature'])
         if 'POWER' in mensaje:
             Fecha = mensaje['Time'].replace('T',' ')
             if mensaje['POWER'] == 'ON':
