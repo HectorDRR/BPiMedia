@@ -3093,7 +3093,7 @@ def Temperatura_Anual(Debug = False):
         # Escribo cabeceras
         file.writelines('Mes,Mínima,Media,Máxima,Horas_Activa\n')
         for f in Valores:
-            file.writelines(str(f[2]) + ',' + str(f[0][0]) + ',' + str(f[0][1]) + ',' + str(f[0][2]) + ',' + str(round(f[1]/60,1)) + '\n')
+            file.writelines(f[2][0:4] + '-' + f[2][4:6] + '-' + '15,' + str(f[0][0]) + ',' + str(f[0][1]) + ',' + str(f[0][2]) + ',' + str(round(f[1]/60,1)) + '\n')
     return
 
 def Temperatura_CreaWeb(Datos, Cada = 2, Cual = 'Temperatura', Activo = 0):
