@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/hector/bin/mipython/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Funciones.py Conjunto de macros para gestionar las descargas del emule, torrent, y la creación y mantenimiento de mi página web
@@ -24,7 +24,6 @@ Preguntas = {
         "SOCMínimo":'cmnd/CargaCoche/Mem2',
         "Relés":'cmnd/CargaCoche/STATUS'
 }
-
 
 class AccesoMQTT:
     """ Para acceder al Venus GX a través de MQTT de cara a gestionar la recarga del coche del sistema FV
@@ -3009,7 +3008,80 @@ def SubCanciones(p1):
     lista.save(p1[:-3] + 'for.srt', encoding='iso-8859-1')
     return
 
-def Temperatura(Cual = 'Temperatura'):
+def Temperatura(cual = 'Temperatura'):
+    """ Se encarga de crear una gráfica con la temperatura del agua en la placa solar de la última semana y un fichero de texto
+        con el tiempo que ha estado la placa activa en el mes en curso.
+        También obtiene la información de la web de Victron y del Venus GX sobre el rendimiento de la instalación FV
+        En esta segunda versión, usamos la base de Datos MySQL montada en la Mulita y que se alimenta a través del Rednode del Venus
+        Ahora tenemos una tabla denominada Sensores que aglutina todos los datos de los sensores de la casa. En este caso, nos atañe 
+        el TPlaca, que contiene la temperatura solo cuando ha variado, y APlaca, que contiene el estado de encendido (1) o apagado (0).
+    """
+    import mysql.connector, datetime
+    
+    # Conectamos a la BD
+    cnx = mysql.connector.connect(user=claves.MySQL_user, password=claves.MySQL_password, host='192.168.3.8', database='RedNode')
+    # Creamos un cursor
+    cursor = cnx.cursor(buffered=True)
+    # Obtenemos los valores totales de hoy del sistema fotovoltaico
+    fv = Victron()
+    # Y los ponemos accesibles a la página en formato JSON
+    with open(env.WEB + 'FV.txt', 'w') as file:
+        file.writelines(json.dumps(fv.Estadistica))
+    # Lanzamos la consulta de los parámetros del sistema FV y de la placa de ACS para que se actualice el fichero /mnt/f/Placas.txt del que se nutre la página web inicial. Más adelante lo portaremos todo a Python
+    os.system('/home/hector/bin/venus.sh ' + claves.VictronInterna)
+    # Obtenemos la fecha de hoy y la guardamos para que se refleje cuando se actualizó la página
+    fecha = datetime.datetime.now()
+    Actualizado = fecha.strftime('%c')
+    # Obtenemos cuantos minutos ha estado encendida la placa este mes
+    cursor.execute("select Valor, Tiempo from Sensores where Sensor = 'APlaca' and Tiempo >= '" + fecha.strftime('%Y-%m-01 00:00:00') + " order by Tiempo'")
+    activo = list(cursor)
+    encendio = 0
+    activa = datetime.timedelta()
+    for f in activo:
+        if f[0] == 1.00:
+            encendio = f[1]
+        elif not encendio == 0:
+            activa = activa + (f[1] - encendio)
+            encendio = 0
+    print('Ha estado encendida un total de ', str(activa))
+    # Obtenemos la mínima, media y máxima del mes en curso. La media a las 17:0* que es cuando activamos la placa en Invierno aprovechando el periodo llano
+    cursor.execute("select Min(Valor), round(Avg(Valor),1), Max(Valor) from Sensores where Sensor = 'TPlaca' and Tiempo >= '" + fecha.strftime('%Y-%m-01') + "' and Tiempo like '%% 17:0%%'")
+    # Pasamos a lista el cursor pero nos quedamos solo con el primer registro que contiene toda la información que necesitamos
+    medias = list(cursor)[0]
+    # Retrocedemos una semana
+    fecha = fecha - datetime.timedelta(days = 7)
+    # Obtenemos los datos de una semana atrás
+    cursor.execute("select * from Sensores where (Sensor='APlaca' or Sensor = 'TPlaca') and Tiempo > '" + fecha.strftime('%Y-%m-%d %H:%M') + "'")
+    datos = list(cursor)
+    # Cerramos la base de datos
+    cursor.close()
+    cnx.close()
+    # Escribimos los valores de las medias en formato JSON para pasárselos a la página web
+    with open(env.WEB + 'Activo.txt', 'w') as file:
+        file.writelines(f'{{"Activa":"{activa}","Minima":{medias[0]},"Media":{medias[1]},"Maxima":{medias[2]},"Actualizado":"{Actualizado}"}}')
+    # Generamos la tabla de datos para mostrar en la gráfica
+    with open(env.WEB + cual + '.csv', 'w') as file:
+        # Escribo cabeceras
+        file.writelines('Hora,Temperatura,Activo\n')
+        calor = 0
+        for f in datos:
+            # Para que funcione la gráfica correctamente, ponemos a '' cuando está apagada e igualamos a la temperatura 
+            # cuando está encendida. De esta manera se superpone en la gráfica sobre la temperatura en rojo cuando está activa
+            acti = ''
+            # Si el registro es de cuando se activó o desactivó la placa, activamos o desactivamos el semáforo calor
+            if f[0] == 'APlaca':
+                if f[1] == 1:
+                    calor = 1
+                else:
+                    calor = 0
+                # Nos vamos a procesar el dato siguiente
+                continue
+            elif calor == 1:
+                acti = f[1]
+            file.writelines(f[2].strftime('%Y-%m-%d %H:%M:%S') + ',' + str(f[1]) + ',' + str(acti) + '\n')
+    return
+    
+def Temperatura2(Cual = 'Temperatura'):
     """ Se encarga de crear una gráfica con la temperatura del agua en la placa solar de la última semana y un fichero de texto
         con el tiempo que ha estado la placa activa en el mes en curso.
         También obtiene la información de la web de Victron y del Venus GX sobre el rendimiento de la instalación FV

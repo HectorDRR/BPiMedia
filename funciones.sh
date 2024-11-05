@@ -7,7 +7,7 @@ function Estado_Placa {
 	# Si hay fichero de log, extraemos la temperatura de allí, si no, la pedimos directamente a la placa.
 	Placa=Off
 	if [ -f /var/log/placa.log ]; then
-		ACS=$(tail /var/log/placa.log |grep SENSOR|tail -1)
+		ACS=$(tail /var/log/placa.log |grep placa/SENSOR|tail -1)
 		ACS="${ACS#*\"Temperature\":}"
 		ACS=${ACS:0:4}
 		#ACS=$(tail /var/log/placa.log |grep SENSOR|tail -1 |cut -c 132-135)
@@ -17,13 +17,13 @@ function Estado_Placa {
 		ACS=$(curl -s http://placa/cm?cmnd=Status%2010)
 		ACS="${ACS#*\"Temperature\":}"
 		ACS=${ACS:0:4}
-		[[ "$(curl -s http://placa/cm?cmnd=Status)" = *"ON"* ]] && Placa=On
+		[[ "$(curl -s http://placa/cm?cmnd=Power)" = *"ON"* ]] && Placa=On
 	fi
 	echo \{\"ACS\":$ACS\}>/mnt/f/ACS.txt
 }
 function procesos {
 	# Comprueba la existencia de los procesos normales del sistema
-	for f in amul qbittorrent minidlna smb vsftpd ddclient; do
+	for f in amul qbittorrent minidlna smb vsftpd ddclient mysqld; do
         	pgrep -af $f
         	if [ $? -eq 1 ]
                 	then
