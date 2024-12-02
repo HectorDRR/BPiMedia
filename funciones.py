@@ -3008,7 +3008,7 @@ def SubCanciones(p1):
     lista.save(p1[:-3] + 'for.srt', encoding='iso-8859-1')
     return
 
-def Temperatura(cual = 'Temperatura'):
+def Temperatura(Cual = 'Temperatura'):
     """ Se encarga de crear una gráfica con la temperatura del agua en la placa solar de la última semana y un fichero de texto
         con el tiempo que ha estado la placa activa en el mes en curso.
         También obtiene la información de la web de Victron y del Venus GX sobre el rendimiento de la instalación FV
@@ -3047,7 +3047,15 @@ def Temperatura(cual = 'Temperatura'):
     # Obtenemos la mínima, media y máxima del mes en curso. La media a las 17:0* que es cuando activamos la placa en Invierno aprovechando el periodo llano
     cursor.execute("select Min(Valor), round(Avg(Valor),1), Max(Valor) from Sensores where Sensor = 'TPlaca' and Tiempo >= '" + fecha.strftime('%Y-%m-01') + "' and Tiempo like '%% 17:0%%'")
     # Pasamos a lista el cursor pero nos quedamos solo con el primer registro que contiene toda la información que necesitamos
-    medias = list(cursor)[0]
+    # El primer día del mes, teníamos un error, puesto que la media devuelve None y hacía cascar el JS en la página puesto que el JSON no soporta dicho valor si no va en comillas, así que hemos tenido que tratar el rsultado para cambiarlo
+    pp = list(cursor)[0]
+    medias = []
+    for f in pp:
+         if f == None: 
+            medias.append(0)
+         else:
+            medias.append(f)
+    print(medias)
     # Retrocedemos una semana
     fecha = fecha - datetime.timedelta(days = 7)
     # Obtenemos los datos de una semana atrás
@@ -3060,7 +3068,7 @@ def Temperatura(cual = 'Temperatura'):
     with open(env.WEB + 'Activo.txt', 'w') as file:
         file.writelines(f'{{"Activa":"{activa}","Minima":{medias[0]},"Media":{medias[1]},"Maxima":{medias[2]},"Actualizado":"{Actualizado}"}}')
     # Generamos la tabla de datos para mostrar en la gráfica
-    with open(env.WEB + cual + '.csv', 'w') as file:
+    with open(env.WEB + Cual + '.csv', 'w') as file:
         # Escribo cabeceras
         file.writelines('Hora,Temperatura,Activo\n')
         calor = 0

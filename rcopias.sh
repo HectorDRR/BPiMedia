@@ -12,6 +12,8 @@ if [ $? -eq 1 ]
 	then
 		cp /tmp/crontab.txt /home/hector/bin/crontab.txt
 fi
+# Hacemos copia de la BD del MySQL
+sudo mysqldump RedNode > /mnt/e/.mini/RedNode.sql
 for f in /home/hector/bin /mnt/f /mnt/e/util /mnt/e/.mini /home/hector/CargaCoche /etc/default; do 
 	rclone sync $f Drive:Odroid/${f##*/} --exclude "art_cache/**" --exclude "__pycache__/*" --exclude ".git/**" -v --log-file /tmp/salcopias.txt
 done
