@@ -42,7 +42,7 @@ with open(fichero, newline='',  encoding='utf-8-sig') as csvfile:
             flag += 1
 print(flag)
 input()
-with open(fichero[0:-4] + '_erroneos.csv', 'a') as csvfile:
+with open(fichero[0:-4] + '_erroneos.csv', 'w') as csvfile:
     for f in lista:
         csvfile.writelines(f + '\n')
 exit

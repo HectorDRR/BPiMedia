@@ -40,7 +40,7 @@ with open(fichero, newline='',  encoding='utf-8-sig') as csvfile:
         else: print(f'El asociado {row[0]} tiene un NIF/NIE inválido: {row[1]}')
 print(lista)
 input()
-with open(fichero[0:-4] + '_zunder.csv', 'a') as csvfile:
+with open(fichero[0:-4] + '_zunder.csv', 'w') as csvfile:
     for f in lista:
         csvfile.writelines(f + '\n')
 exit

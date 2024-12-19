@@ -7,7 +7,7 @@ En primer lugar, mantendremos una lista de las funciones implementadas, su funci
 que son opcionales
 """
 
-import time, shutil, os, re, sys, stat, json, inspect, logging
+import datetime, inspect, json, logging, os, re, shutil, stat, sys, time
 import claves
 import paho.mqtt.client as mqtt
 
@@ -130,7 +130,6 @@ class AccesoMQTT:
         """ Controla el estado de la batería y del relé y activa o desactiva 
             en función de la hora y el % de SOC
         """
-        import datetime
         # Obtenemos los datos de estado de la batería
         self.pregunta()
         # Nos quedamos con la hora para no saturar de mensajes en la misma hora
@@ -792,7 +791,6 @@ class Victron:
                 sol unas cuantas horas, por lo que en ese tiempo no hay lecturas de ninguna que empiece por P. Esto nos obliga a
                 replantearnos la manera de organizar los datos
         """
-        import datetime
         # Le restamos a la fecha los segundos de x días * 24 horas
         atras = int(datetime.datetime.utcnow().timestamp()) - (Cuantos * 86400)
         # Obtenemos la estadística detallada de los últimos dos días en intervalos de 15minutos
@@ -1581,7 +1579,6 @@ def CuantaCarga():
         Esta función la ejecutaremos una vez al mes para generar los datos para la gráfica en la web
         La llamaremos desde la misma que generamos otros gráficos mensuales
     """
-    import datetime
     # Extraemos del log (venus:/home/root/lib/Carga.log) las líneas que contienen el resumen diario
     lineas = os.popen("ssh -l root venus grep estado /home/root/lib/Carga.log |cut -d ' ' -f 1,9,12").read().split('\n')
     # Nos cepillamos la última línea vacía
@@ -1674,6 +1671,27 @@ def Duracion(Tiempo):
     hora, minuto, seg = Tiempo.split(':')
     return (((int(hora) * 3600) + (int(minuto) * 60)) * 1000 + int(float(seg)*1000))
 
+def Encendida(cursor, fechainicial = datetime.datetime.today().replace(day = 1), fechafinal = datetime.datetime.now(), Debug = False):
+    """ Función para obtener el tiempo que ha estado activa la placa de ACS partiendo de la información almacenada en el MySQL
+    Necesitamos pasarle el cursor con la BD ya abierta y devuelve un datetime.timedelta
+    Si solo pasamos el cursor, por defecto nos da el tiempo del mes en curso.
+    """
+    
+    import mysql.connector
+    # Obtenemos cuantos minutos ha estado encendida la placa durante un periodo dado o lo que va de este mes si no se especifica nada
+    cursor.execute(f"select Valor, Tiempo from Sensores where Sensor = 'APlaca' and Tiempo >= '{fechainicial.strftime('%Y-%m-%d %H:%M:%S')}' and Tiempo < '{fechafinal.strftime('%Y-%m-%d %H:%M:%S')}' order by Tiempo")
+    activo = list(cursor)
+    encendio = 0
+    activa = datetime.timedelta()
+    for f in activo:
+        if f[0] == 1.00:
+            encendio = f[1]
+        elif not encendio == 0:
+            activa = activa + (f[1] - encendio)
+            encendio = 0
+    print('Ha estado encendida un total de ', str(activa))
+    return(activa)
+
 def Etiqueta(Ruta):
     """ Obtenemos la etiqueta del disco montado en Ruta sin la '/' final
     """
@@ -1739,7 +1757,7 @@ def Fotos(Debug = '0', prefijo = ''):
     Comparativa motor Diésel - eléctrico (Ioniq).jpeg
     Comparativa motor Diésel - eléctrico (Ioniq).j.json
     """
-    import glob, datetime, locale
+    import glob, locale
     if eval(Debug):
         nivel = logging.DEBUG
     else:
@@ -1821,7 +1839,6 @@ def Generacion(Fichero = '/tmp/Canarias.json', Debug = False):
         con los siguientes parámetros:
         https://apidatos.ree.es/es/datos/generacion/estructura-renovables?start_date=2020-04-01T00:00&end_date=2020-04-27T23:59&geo_trunc=electric_system&geo_limit=canarias&geo_ids=8742&time_trunc=day
     """
-    import datetime
     # Obtenemos la fecha de ayer y la de hace 30 días
     fechafin = datetime.datetime.now() - datetime.timedelta(days = 1)
     fechaini = fechafin - datetime.timedelta(days = 30)
@@ -2650,7 +2667,7 @@ def PasaaBD(Fichero = '/var/log/placa.log', Debug = False):
     """ Esta función pasa a una Base de Datos en sqlite3 la información de la placa solar y la bomba obtenida a través del MQTT
     y volcada en /var/log/placa.log. Una vez renombramos el fichero, pasamos los datos, y los archivamos en un zip.
     """
-    import sqlite3, datetime
+    import sqlite3
     
     if type(Debug) == str:
         Debug = eval(Debug)
@@ -2730,6 +2747,32 @@ def PasaaBD(Fichero = '/var/log/placa.log', Debug = False):
         os.system('zip -m logs.zip placa_' + time.strftime('%Y%m%d') + '.log')
         Log('Terminamos por hoy la importación de datos del log de la Placa a la BD con el ' + f[0:15] + '  y hemos importado ' + str(contador) + ' valores y comprimido el log')
 
+def PasaaMySQL(Debug = False):
+    """ Esta función pasa al MySQL los valores almacenados de la Placa en el sqlite3
+    """
+    import sqlite3, datetime, mysql.connector
+    
+    if type(Debug) == str:
+        Debug = eval(Debug)
+    # Conectamos con la BD del sqlite3
+    con = sqlite3.connect('/mnt/e/.mini/placa.db')
+    cursor = con.cursor()
+    # Obtenemos los datos hasta septiembre de 2024, que fue cuando desde el NodeRed empezamos a mandarlos al MySQL
+    datos = cursor.execute("Select * From placa Where Fecha < '2024-09-16' AND Fecha > '1980'").fetchall()
+    con.close()
+    # Abrimos conexión con el MySQL
+    con = mysql.connector.connect(user=claves.MySQL_user, password=claves.MySQL_password, host='192.168.3.8', database='RedNode')
+    cursor = con.cursor(buffered=True)
+    temp = 0
+    for f in datos:
+        # Filtramos los datos repetidos para quedarnos solo con los diferentes
+        if f[2] != temp:
+            temp = f[2]
+            cursor.execute("INSERT INTO Sensores (Tiempo, Sensor, Valor) VALUES ('" + str(f[0]) + "', 'APlaca', " + str(temp) + ")")
+    cursor.execute('commit')
+    con.close()
+    return
+    
 def Placa(Quehacemos = 4, Tiempo = 0, Debug = False):
     """ Función encargada de controlar el SonOff de la placa a través de MQTT/URL.
     Si Quehacemos: 0 Paramos la placa
@@ -2769,12 +2812,12 @@ def Placa(Quehacemos = 4, Tiempo = 0, Debug = False):
         placa.Controla(Quehacemos, Tiempo = Tiempo, Debug = Debug)
     return placa.Temperatura
 
-def Prueba(param, debug = False):
+def Prueba(param, Debug = False):
     """ Para probar funciones que estamos desarrollando
         Procesado de los mensajes de la bomba
     """
     print(type(param)==str, int(param))
-    if debug:
+    if Debug:
         print(debug)
     pp = AccesoMQTT(True)
     pp.pregunta()
@@ -3008,15 +3051,16 @@ def SubCanciones(p1):
     lista.save(p1[:-3] + 'for.srt', encoding='iso-8859-1')
     return
 
-def Temperatura(Cual = 'Temperatura'):
+def Temperatura(Cual = 'Temperatura', Debug = False):
     """ Se encarga de crear una gráfica con la temperatura del agua en la placa solar de la última semana y un fichero de texto
         con el tiempo que ha estado la placa activa en el mes en curso.
         También obtiene la información de la web de Victron y del Venus GX sobre el rendimiento de la instalación FV
-        En esta segunda versión, usamos la base de Datos MySQL montada en la Mulita y que se alimenta a través del Rednode del Venus
+        En esta segunda versión, usamos la base de Datos MySQL montada en la Mulita y que se alimenta a través del NodeRed del Venus
         Ahora tenemos una tabla denominada Sensores que aglutina todos los datos de los sensores de la casa. En este caso, nos atañe 
         el TPlaca, que contiene la temperatura solo cuando ha variado, y APlaca, que contiene el estado de encendido (1) o apagado (0).
+        Además, el MMin, MMed, MMax y MAct que son las medias mensuales de T y de tiempo que la placa ha estado activa
     """
-    import mysql.connector, datetime
+    import mysql.connector
     
     # Conectamos a la BD
     cnx = mysql.connector.connect(user=claves.MySQL_user, password=claves.MySQL_password, host='192.168.3.8', database='RedNode')
@@ -3032,30 +3076,36 @@ def Temperatura(Cual = 'Temperatura'):
     # Obtenemos la fecha de hoy y la guardamos para que se refleje cuando se actualizó la página
     fecha = datetime.datetime.now()
     Actualizado = fecha.strftime('%c')
-    # Obtenemos cuantos minutos ha estado encendida la placa este mes
-    cursor.execute("select Valor, Tiempo from Sensores where Sensor = 'APlaca' and Tiempo >= '" + fecha.strftime('%Y-%m-01 00:00:00') + " order by Tiempo'")
-    activo = list(cursor)
-    encendio = 0
-    activa = datetime.timedelta()
-    for f in activo:
-        if f[0] == 1.00:
-            encendio = f[1]
-        elif not encendio == 0:
-            activa = activa + (f[1] - encendio)
-            encendio = 0
-    print('Ha estado encendida un total de ', str(activa))
+    activa = Encendida(cursor)
     # Obtenemos la mínima, media y máxima del mes en curso. La media a las 17:0* que es cuando activamos la placa en Invierno aprovechando el periodo llano
-    cursor.execute("select Min(Valor), round(Avg(Valor),1), Max(Valor) from Sensores where Sensor = 'TPlaca' and Tiempo >= '" + fecha.strftime('%Y-%m-01') + "' and Tiempo like '%% 17:0%%'")
+    cursor.execute(f"select Min(Valor), round(Avg(Valor),1), Max(Valor) from Sensores where Sensor = 'TPlaca' and Tiempo >= '{fecha.strftime('%Y-%m-01')}' and Tiempo like '%% 17:%%'")
     # Pasamos a lista el cursor pero nos quedamos solo con el primer registro que contiene toda la información que necesitamos
-    # El primer día del mes, teníamos un error, puesto que la media devuelve None y hacía cascar el JS en la página puesto que el JSON no soporta dicho valor si no va en comillas, así que hemos tenido que tratar el rsultado para cambiarlo
-    pp = list(cursor)[0]
-    medias = []
-    for f in pp:
+    # El primer día del mes, teníamos un error, puesto que la media devuelve None y hacía cascar el JS en la página puesto que el JSON no soporta dicho valor si no va en comillas, 
+    # así que hemos tenido que tratar el resultado para cambiarlo
+    medias = list(cursor)[0]
+    for f in medias:
          if f == None: 
-            medias.append(0)
-         else:
-            medias.append(f)
-    print(medias)
+            f=0
+    # Si el resultado no es 0 y son las 5 de la tarde, lo guardamos en la BD para luego representar las medias mensuales
+    if medias[0] > 0 and int(fecha.strftime('%H%M')) == 1700:
+        # Primero buscamos si ya existe el registro de este mes
+        cursor.execute(f"SELECT * FROM Sensores WHERE Sensor = 'MAct' AND Tiempo = '{fecha.strftime('%Y-%m-15 00:00')}'")
+        existe = list(cursor.fetchall())
+        # Si no existe el registro lo creamos
+        if len(existe) == 0:
+            cursor.execute(f"INSERT INTO Sensores (Tiempo, Sensor, Valor) VALUES ('{fecha.strftime('%Y-%m-15 00:00')}', 'MMin', {medias[0]})")
+            cursor.execute(f"INSERT INTO Sensores (Tiempo, Sensor, Valor) VALUES ('{fecha.strftime('%Y-%m-15 00:00')}', 'MMed', {medias[1]})")
+            cursor.execute(f"INSERT INTO Sensores (Tiempo, Sensor, Valor) VALUES ('{fecha.strftime('%Y-%m-15 00:00')}', 'MMax', {medias[2]})")
+            cursor.execute(f"INSERT INTO Sensores (Tiempo, Sensor, Valor) VALUES ('{fecha.strftime('%Y-%m-15 00:00')}', 'MAct', {activa.seconds})")
+        # En caso de que exista, lo actualizamos
+        else:
+            cursor.execute(f"UPDATE Sensores WHERE Sensor = 'MMin' AND Tiempo = '{fecha.strftime('%Y-%m-15 00:00')}' SET Valor = {medias[0]}")
+            cursor.execute(f"UPDATE Sensores WHERE Sensor = 'MMin' AND Tiempo = '{fecha.strftime('%Y-%m-15 00:00')}' SET Valor = {medias[1]}")
+            cursor.execute(f"UPDATE Sensores WHERE Sensor = 'MMin' AND Tiempo = '{fecha.strftime('%Y-%m-15 00:00')}' SET Valor = {medias[2]}")
+            cursor.execute(f"UPDATE Sensores WHERE Sensor = 'MMin' AND Tiempo = '{fecha.strftime('%Y-%m-15 00:00')}' SET Valor = {activa.seconds}")
+        cursor.execute('commit')
+    if Debug:
+        print(medias)
     # Retrocedemos una semana
     fecha = fecha - datetime.timedelta(days = 7)
     # Obtenemos los datos de una semana atrás
@@ -3094,7 +3144,7 @@ def Temperatura2(Cual = 'Temperatura'):
         con el tiempo que ha estado la placa activa en el mes en curso.
         También obtiene la información de la web de Victron y del Venus GX sobre el rendimiento de la instalación FV
     """
-    import sqlite3, datetime
+    import sqlite3
     # Obtenemos los valores totales de hoy del sistema fotovoltaico
     fv = Victron()
     # Y los ponemos accesibles a la página en formato JSON
@@ -3145,7 +3195,42 @@ def Temperatura_Anual(Debug = False):
     """ Se encarga de crear una gráfica con la temperatura mínima, media y máxima del agua a las 17:00 en la placa solar de
         cada mes y también el tiempo que ha estado encendida desde que tenemos datos.
     """
-    import sqlite3, datetime, dateutil.relativedelta
+
+    import mysql.connector
+
+    # Conectamos a la BD
+    cnx = mysql.connector.connect(user=claves.MySQL_user, password=claves.MySQL_password, host='192.168.3.8', database='RedNode')
+    # Creamos un cursor
+    cursor = cnx.cursor(buffered=True)
+    # Creamos la tabla que va a almacenar todos los valores, Min, Media, Max y Activo
+    cursor.execute("SELECT * FROM Sensores WHERE Sensor = 'MAct' OR Sensor = 'MMin' OR Sensor = 'MMed' OR Sensor = 'MMax' ORDER BY Tiempo")
+    Valores = list(cursor.fetchall())
+    if Debug:
+        print(Valores[len(Valores)-5:])
+    # Cerramos la base de datos
+    cnx.close()
+    # Creamos el fichero de datos
+    with open(env.WEB + 'TemperaturaA.csv', 'w') as file:
+        # Escribo cabeceras
+        file.writelines('Mes,Mínima,Media,Máxima,Horas_Activa\n')
+        for f in Valores:
+            # Extraigo los valores partiendo de que vienen en este orden de la consulta y que el último de cada mes es MAct, por eso no chequeo fechas
+            match f[0]:
+                case 'MMin':
+                    Min = f[1]
+                case 'MMed':
+                    Med = f[1]
+                case 'MMax':
+                    Max = f[1]
+                case 'MAct':
+                    file.writelines(f'{f[2].strftime('%Y-%m-%d')},{Min},{Med},{Max},{round(f[1]/3600,2)}\n')
+    return
+
+def Temperatura_Anual2(Debug = False):
+    """ Se encarga de crear una gráfica con la temperatura mínima, media y máxima del agua a las 17:00 en la placa solar de
+        cada mes y también el tiempo que ha estado encendida desde que tenemos datos.
+    """
+    import sqlite3, dateutil.relativedelta
     # Cargamos los datos excluyendo los de la Bomba, por ahora
     bd = sqlite3.connect('/mnt/e/.mini/placa.db')
     cursor = bd.cursor()
