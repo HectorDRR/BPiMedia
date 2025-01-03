@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 # Macro para generar los códigos para la promo de Zunder a partir del nº de socio de la AUVE y los últimos 4 caracteres del DNI
 #
+# 20241223, Ver 0.2: Añadimos la generación de lista de erróneos para mandar desde Thunderbird con el Mail Merge
 # 20241130, Ver 0.1: Primera implementación
 #
 import csv, re, sys
@@ -22,6 +23,7 @@ def validoDNI(dni):
     
 fichero = sys.argv[1]
 lista = ['Codigo']
+erroneos = ['codigo,id.externo,Nombre,email']
 with open(fichero, newline='',  encoding='utf-8-sig') as csvfile:
     pp=csv.reader(csvfile, delimiter=';')
     flag = 0
@@ -33,14 +35,18 @@ with open(fichero, newline='',  encoding='utf-8-sig') as csvfile:
         # Quitamos espacio al final del NIF/NIE si lo hay
         row[1] = row[1].strip()
         # Comprobamos que es NIF/NIE
-        #if re.match(r"\d+[a-zA-Z]$",row[1]) != None or re.match(r"[x-zX-Z]\d+[a-zA-Z]$",row[1]) != None:
-        if validoDNI(row[1].upper()):
-            # Añadimos a la lista en mayúsculas
+        if validoDNI(row[1]):
+            # Añadimos a la lista
             lista.append('{:0>4}'.format(int(row[0]))+row[1].upper()[-4:])
-        else: print(f'El asociado {row[0]} tiene un NIF/NIE inválido: {row[1]}')
+        else: erroneos.append(row[0] + ',' + row[1] + ',' + row[2] + ',' + row[3])
+print('NIF erróneos',erroneos)
 print(lista)
 input()
 with open(fichero[0:-4] + '_zunder.csv', 'w') as csvfile:
     for f in lista:
         csvfile.writelines(f + '\n')
+if len(erroneos) > 1:
+    with open(fichero[0:-4] + '_erroneos.csv', 'w') as csvfile:
+        for f in erroneos:
+            csvfile.writelines(f + '\n')
 exit

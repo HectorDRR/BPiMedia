@@ -3099,10 +3099,10 @@ def Temperatura(Cual = 'Temperatura', Debug = False):
             cursor.execute(f"INSERT INTO Sensores (Tiempo, Sensor, Valor) VALUES ('{fecha.strftime('%Y-%m-15 00:00')}', 'MAct', {activa.seconds})")
         # En caso de que exista, lo actualizamos
         else:
-            cursor.execute(f"UPDATE Sensores WHERE Sensor = 'MMin' AND Tiempo = '{fecha.strftime('%Y-%m-15 00:00')}' SET Valor = {medias[0]}")
-            cursor.execute(f"UPDATE Sensores WHERE Sensor = 'MMin' AND Tiempo = '{fecha.strftime('%Y-%m-15 00:00')}' SET Valor = {medias[1]}")
-            cursor.execute(f"UPDATE Sensores WHERE Sensor = 'MMin' AND Tiempo = '{fecha.strftime('%Y-%m-15 00:00')}' SET Valor = {medias[2]}")
-            cursor.execute(f"UPDATE Sensores WHERE Sensor = 'MMin' AND Tiempo = '{fecha.strftime('%Y-%m-15 00:00')}' SET Valor = {activa.seconds}")
+            cursor.execute(f"UPDATE Sensores SET Valor = {medias[0]} WHERE Sensor = 'MMin' AND Tiempo = '{fecha.strftime('%Y-%m-15 00:00')}'")
+            cursor.execute(f"UPDATE Sensores SET Valor = {medias[1]} WHERE Sensor = 'MMed' AND Tiempo = '{fecha.strftime('%Y-%m-15 00:00')}'")
+            cursor.execute(f"UPDATE Sensores SET Valor = {medias[2]} WHERE Sensor = 'MMax' AND Tiempo = '{fecha.strftime('%Y-%m-15 00:00')}'")
+            cursor.execute(f"UPDATE Sensores SET Valor = {activa.seconds} WHERE Sensor = 'MAct' AND Tiempo = '{fecha.strftime('%Y-%m-15 00:00')}'")
         cursor.execute('commit')
     if Debug:
         print(medias)
@@ -3138,58 +3138,6 @@ def Temperatura(Cual = 'Temperatura', Debug = False):
                 acti = f[1]
             file.writelines(f[2].strftime('%Y-%m-%d %H:%M:%S') + ',' + str(f[1]) + ',' + str(acti) + '\n')
     return
-    
-def Temperatura2(Cual = 'Temperatura'):
-    """ Se encarga de crear una gráfica con la temperatura del agua en la placa solar de la última semana y un fichero de texto
-        con el tiempo que ha estado la placa activa en el mes en curso.
-        También obtiene la información de la web de Victron y del Venus GX sobre el rendimiento de la instalación FV
-    """
-    import sqlite3
-    # Obtenemos los valores totales de hoy del sistema fotovoltaico
-    fv = Victron()
-    # Y los ponemos accesibles a la página en formato JSON
-    with open(env.WEB + 'FV.txt', 'w') as file:
-        file.writelines(json.dumps(fv.Estadistica))
-    # Lanzamos la consulta de los parámetros del sistema FV y de la placa de ACS para que se actualice el fichero /mnt/f/Placas.txt del que se nutre la página web inicial. Más adelante lo portaremos todo a Python
-    os.system('/home/hector/bin/venus.sh ' + claves.VictronInterna)
-    # Importamos los últimos datos a la BD
-    PasaaBD()
-    # Cargamos los datos excluyendo los de la Bomba, por ahora
-    bd = sqlite3.connect('/mnt/e/.mini/placa.db')
-    cursor = bd.cursor()
-    # Obtenemos la fecha de hoy y la guardamos para que se refleje cuando se actualizó la página
-    fecha = datetime.datetime.now()
-    Actualizado = fecha.strftime('%c')
-    # Obtenemos cuantos minutos ha estado encendida la placa este mes
-    activa = list(cursor.execute("select count(Encendido)*5 from placa where encendido=1 and fecha > '" + fecha.strftime('%Y-%m-00') + "'"))[0][0]
-    # Lo pasamos a horas y minutos
-    activa = f'{activa // 60:02}:{activa % 60:02}'
-    # Obtenemos la mínima, media y máxima del mes en curso. La media a las 17:0* que es cuando activamos la placa en Invierno aprovechando el periodo llano
-    medias = list(cursor.execute("select Min(Temperatura), round(Avg(Temperatura),1), Max(Temperatura) from placa where fecha > '" + fecha.strftime('%Y-%m-00') + "' and fecha like '%% 17:0%%'"))[0]
-    # El primer día de cada mes hasta pasadas las 17.00 obtenemos un valor None que nos descalabra la lectura desde la página web, así que lo cambiamos a 0
-    if medias[0] == None:
-        medias = [0, 0, 0]
-    # Retrocedemos una semana
-    fecha = fecha - datetime.timedelta(days = 7)
-    # Añadimos el .fetchall() para pasar los datos como una lista y no seguir usando el cursor
-    datos = cursor.execute("Select * From placa Where Fecha > '" + fecha.strftime('%Y-%m-%d %H:%M') + "'").fetchall()
-    # Cerramos la base de datos
-    bd.close()
-    # Escribimos los valores en formato JSON para pasárselos a la página web
-    with open(env.WEB + 'Activo.txt', 'w') as file:
-        file.writelines(f'{{"Activa":"{activa}","Minima":{medias[0]},"Media":{medias[1]},"Maxima":{medias[2]},"Actualizado":"{Actualizado}"}}')
-    with open(env.WEB + Cual + '.csv', 'w') as file:
-        # Escribo cabeceras
-        file.writelines('Hora,Temperatura,Activo\n')
-        for f in datos:
-            # Para que funcione la gráfica correctamente, ponemos a '' cuando está apagada e igualamos a la temperatura 
-            # cuando está encendida. De esta manera se superpone en la gráfica sobre la temperatura en rojo cuando está activa
-            if f[2] == 1:
-                acti = f[1]
-            else:
-                acti = ''
-            file.writelines(f[0] + ',' + str(f[1]) + ',' + str(acti) + '\n')
-    return
 
 def Temperatura_Anual(Debug = False):
     """ Se encarga de crear una gráfica con la temperatura mínima, media y máxima del agua a las 17:00 en la placa solar de
@@ -3224,41 +3172,6 @@ def Temperatura_Anual(Debug = False):
                     Max = f[1]
                 case 'MAct':
                     file.writelines(f'{f[2].strftime('%Y-%m-%d')},{Min},{Med},{Max},{round(f[1]/3600,2)}\n')
-    return
-
-def Temperatura_Anual2(Debug = False):
-    """ Se encarga de crear una gráfica con la temperatura mínima, media y máxima del agua a las 17:00 en la placa solar de
-        cada mes y también el tiempo que ha estado encendida desde que tenemos datos.
-    """
-    import sqlite3, dateutil.relativedelta
-    # Cargamos los datos excluyendo los de la Bomba, por ahora
-    bd = sqlite3.connect('/mnt/e/.mini/placa.db')
-    cursor = bd.cursor()
-    # Obtenemos la fecha
-    fechafinal = datetime.datetime.now()
-    # Ponemos la fecha inicial
-    fecha = datetime.datetime(2018, 4, 1)
-    # Creamos la tabla que va a almacenar todos los valores, Min, Media, Max y Activo
-    Valores = [[]]
-    # Limpiamos para que no se nos quede el primer elemento vacío y podamos meterla en el bucle
-    Valores.clear()
-    while fecha.strftime('%Y%m') < fechafinal.strftime('%Y%m'):
-        # Obtenemos la Tª mínima, media y máxima a las 17:0%
-        Valores.append(list(cursor.execute("select  Min(Temperatura), Round(Avg(Temperatura),1), Max(Temperatura) from placa where fecha like '" + fecha.strftime('%Y-%m-__ 17:0%%') + "'"))[0])
-        # Obtenemos cuantos minutos ha estado encedida la placa cada mes
-        Valores[len(Valores)-1] = Valores[len(Valores)-1], list(cursor.execute("select count(Encendido)*5 from placa where encendido=1 and fecha like '" + fecha.strftime('%Y-%m-%%') + "'"))[0][0], fecha.strftime('%Y%m15')
-        # Añadimos un mes a la fecha inicial
-        fecha = fecha + dateutil.relativedelta.relativedelta(months = 1)
-        if Debug:
-            print(fecha)
-    # Cerramos la base de datos
-    bd.close()
-    # Creamos el fichero de datos
-    with open(env.WEB + 'TemperaturaA.csv', 'w') as file:
-        # Escribo cabeceras
-        file.writelines('Mes,Mínima,Media,Máxima,Horas_Activa\n')
-        for f in Valores:
-            file.writelines(f[2][0:4] + '-' + f[2][4:6] + '-' + '15,' + str(f[0][0]) + ',' + str(f[0][1]) + ',' + str(f[0][2]) + ',' + str(round(f[1]/60,1)) + '\n')
     return
 
 def Temperatura_CreaWeb(Datos, Cada = 2, Cual = 'Temperatura', Activo = 0):

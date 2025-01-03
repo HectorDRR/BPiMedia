@@ -36,13 +36,14 @@ with open(fichero, newline='',  encoding='utf-8-sig') as csvfile:
         print(row)
         row[1] = row[1].strip()
         # Comprobamos que es NIF/NIE
-        if not validoDNI(row[1].upper()) and row[1][-1:].isalpha() and row[0] < "7651":
+        if not validoDNI(row[1].upper()): #and row[1][-1:].isalpha():
             # Añadimos a la lista en mayúsculas
             lista.append(row[0] + ',' + row[1].upper() + ',' + row[2] + ',' + row[3])
             flag += 1
-print(flag)
+print(lista)
 input()
-with open(fichero[0:-4] + '_erroneos.csv', 'w') as csvfile:
-    for f in lista:
-        csvfile.writelines(f + '\n')
-exit
+if flag > 1:
+    with open(fichero[0:-4] + '_erroneos.csv', 'w') as csvfile:
+        for f in lista:
+            csvfile.writelines(f + '\n')
+exit(0)
