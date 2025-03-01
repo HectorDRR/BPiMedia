@@ -3013,6 +3013,38 @@ def SalvaPantalla(TimeOut = 90):
         # Esperamos 1 segundo
         time.sleep(1)
 
+def SDRandom(Trasto = '', Debug = False):
+    """ Función para reordenar las canciones en el MP3 acuático de Elena o la SD de las fotos para el marco digital, que no incorporan función Random válida.
+    En el caso del portaretratos, depende de su reloj interno y como no mantiene la hora, pues siempre conserva el mismo orden
+    De parámetros solo hemos de pasarle la unidad donde están los ficheros a modificar, asumiremos solo las extensiones mp3 o jpg
+    """
+    import glob, random
+    if isinstance(Debug, str):
+        Debug = eval(Debug)
+    if len(Trasto) > 0 and not Trasto == 'Fotos':
+        os.chdir(Trasto)
+    lista = glob.glob('*.mp3') + glob.glob('*.jpg')
+    if Debug:
+        print(lista)
+    lista.sort()
+    for f in lista:
+        # Generamos el número aleatorio
+        pp = round(random.random() * 10000)
+        # Por si conseguimos el 1
+        if pp == 10000:
+            pp = pp - 1
+        if f[0:3].isnumeric() and not Trasto == 'Fotos':
+            if f[3] == '-':
+                nuevo = f'{pp:04}{f[3:]}'
+            else:
+                nuevo = f'{pp:04}{f[4:]}'
+        else:
+            nuevo = f'{pp:04}-{f}'
+        print(f'Cambiando {f} por {nuevo}')
+        if not Debug:
+            os.rename(f, f'{nuevo}')
+    return
+
 def Semanal():
     """ Para generar cada hora la gráfica de consumo y generación de la fotovoltaica de los últimos 7 días
     """
@@ -3062,6 +3094,9 @@ def Temperatura(Cual = 'Temperatura', Debug = False):
     """
     import mysql.connector
     
+    if type(Debug) is str:
+        Debug = eval(Debug)
+    print(Debug)
     # Conectamos a la BD
     cnx = mysql.connector.connect(user=claves.MySQL_user, password=claves.MySQL_password, host='192.168.3.8', database='RedNode')
     # Creamos un cursor
@@ -3083,9 +3118,8 @@ def Temperatura(Cual = 'Temperatura', Debug = False):
     # El primer día del mes, teníamos un error, puesto que la media devuelve None y hacía cascar el JS en la página puesto que el JSON no soporta dicho valor si no va en comillas, 
     # así que hemos tenido que tratar el resultado para cambiarlo
     medias = list(cursor)[0]
-    for f in medias:
-         if f == None: 
-            f=0
+    # Si es None, lo convertimos en 0
+    medias = [0 if x==None else x for x in medias]
     # Si el resultado no es 0 y son las 5 de la tarde, lo guardamos en la BD para luego representar las medias mensuales
     if medias[0] > 0 and int(fecha.strftime('%H%M')) == 1700:
         # Primero buscamos si ya existe el registro de este mes
