@@ -14,7 +14,6 @@ lista=([FV]=Ac/PvOnOutput/L1/Power [Consumo]=Ac/Consumption/L1/Power [Red]=Ac/Gr
 # Hacemos un bucle para suscribirnos al elemento y hacer la petición
 for f in "${!lista[@]}"
 do
-	#echo /tmp/$f ${lista[$f]}
 	mosquitto_sub -h venus -t N/$Victron/system/0/${lista[$f]} -C 1 >/tmp/$f &
 	mosquitto_pub -h venus -t R/$Victron/system/0/${lista[$f]} -m ''
 done
@@ -24,8 +23,13 @@ linea=''
 # Leemos los distintos ficheros para unirlos
 for f in "${!lista[@]}"
 do
-	echo $f $(cat /tmp/$f)
-    linea=$linea$(SacaValor $f)
+	if [ -s /tmp/$f ] 
+	then
+		echo $f $(cat /tmp/$f)
+		linea=$linea$(SacaValor $f)
+	else
+		echo $f Sin contenido
+	fi
 done
 #linea=$linea$(SacaValor Vertido)
 # Obtenemos todos los valores de estadística de la web de Victron (24h, semana, mes y año) desde Python

@@ -23,7 +23,7 @@ function Estado_Placa {
 }
 function procesos {
 	# Comprueba la existencia de los procesos normales del sistema
-	for f in amul qbittorrent minidlna smb vsftpd ddclient mysqld; do
+	for f in amul qbittorrent-nox minidlna smb vsftpd ddclient mysqld; do
         	pgrep -af $f
         	if [ $? -eq 1 ]
                 	then

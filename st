@@ -14,10 +14,15 @@ echo Temperatura del agua: $ACSº
 echo Estado de la placa: $Placa
 for f in Consumo FV Bateria Red
 do
-	vari=$(cat /tmp/$f)
-	vari=$(json "$vari")
-	vari=$(LC_ALL=C printf "%.*f\n" 2 "$vari")
-	echo $f: $vari
+	if [ -s /tmp/$f ]
+	then 
+		vari=$(cat /tmp/$f)
+		vari=$(json "$vari")
+		vari=$(LC_ALL=C printf "%.*f\n" 2 "$vari")
+		echo $f: $vari
+	else
+		echo $f: Valor no detectado
+	fi
 done
 echo Carga de la SAI: `upsc MiSAI@localhost ups.load > /dev/stdout 2> /dev/null`%
 procesos
@@ -72,6 +77,7 @@ sudo tail -140 /var/log/syslog|grep -v CRON|grep -v DHT|tail -40
 [ -f /var/log/placa.log ] && tail /var/log/placa.log
 [ -f /tmp/mulacaida.txt ] && cat /tmp/mulacaida.txt
 [ -f /tmp/ftpcaido.txt ] && cat /tmp/ftpcaido.txt
+[ -f /home/hector/milog.txt ] && cat /home/hector/milog.txt
 # echo la carga del coche
 # read p
 # ssh -l root venus tail -20 /home/root/lib/Carga.log
