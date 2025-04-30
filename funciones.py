@@ -792,7 +792,7 @@ class Victron:
                 replantearnos la manera de organizar los datos
         """
         # Le restamos a la fecha los segundos de x días * 24 horas
-        atras = int(datetime.datetime.utcnow().timestamp()) - (Cuantos * 86400)
+        atras = int(datetime.datetime.now().timestamp()) - (Cuantos * 86400)
         # Obtenemos la estadística detallada de los últimos dos días en intervalos de 15minutos
         leido = self.MandaCurl(self.URLInstalacion + 'stats?type=kwh&start=' + str(atras) + '&interval=hours')
         self.Semana = leido

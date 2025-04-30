@@ -1,8 +1,9 @@
 #!/bin/bash
 #Macro para hacer copias de bin y /mnt/f a Google Drive usando rclone
-# Ver 1.0: Excluimos la carpeta .git y __pycache__ de bin
-# Ver 1.1: Añadimos /mnt/e/util y /mnt/e/.mini y también generamos un fichero con el crontab en bin antes de la copia
+# Ver 1.3: Añadimos la copia de la BD del Mysql del Nodered
 # Ver 1.2: Creamos el crontab .txt en /tmp y comparamos con el diff para ver si ha cambiado y copiarlo a bin
+# Ver 1.1: Añadimos /mnt/e/util y /mnt/e/.mini y también generamos un fichero con el crontab en bin antes de la copia
+# Ver 1.0: Excluimos la carpeta .git y __pycache__ de bin
 #
 echo `date +%d/%m/%Y\ %H:%M:%S` [copias.sh] Empezamos la copia al Google drive>>/mnt/e/.mini/milog.txt
 # Generamos el crontab en /tmp para compararlo con el guardado. Si ha cambiado machacamos el que hay en bin para que se copie
