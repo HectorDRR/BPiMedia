@@ -1175,6 +1175,53 @@ def BP(Peli, Comentario):
         Log('Borramos ' + Peli + ' con el comentario: ' + Comentario, True)
     return
 
+def CalculaCoche(Mes = None, Año = None, Debug = False):
+    """ Función para calcular el tiempo que se ha cargado el coche con la FV para un mes dado o el mes en curso
+    """
+    import mysql.connector
+    if type(Debug) is str:
+        Debug = eval(Debug)
+        print(Debug)
+    # Conectamos a la BD
+    con = mysql.connector.connect(user=claves.MySQL_user, password=claves.MySQL_password, host='192.168.3.8', database='RedNode')
+    # Creamos un cursor
+    cursor = con.cursor(buffered=True)
+    fecha = datetime.datetime.now()
+    # Si no pasamos parámetro, calculamos el del mes en curso
+    if Mes == None:
+        Mes = str(fecha.month)
+    if Año == None:
+        Año = fecha.year
+    # Obtenemos la lista de veces que se ha conectado/desconectado la cargafv
+    cursor.execute(f"select Valor, Tiempo from Sensores where Sensor = 'CargaFV' and Tiempo like '{Año}-{Mes.zfill(2)}%' order by Tiempo")
+    cargafv = list(cursor)
+    enc = datetime.datetime(2000, 1, 1, 1, 1, 1)
+    activa = datetime.timedelta()
+    # Buscamos primero cuando se ha encendido y luego cuando se ha apagado
+    for f in cargafv:
+        if f[0] == 1:
+            enc = f[1]
+        elif enc.strftime('%Y-%m-%d') == f[1].strftime('%Y-%m-%d'):
+            # Si han pasado menos de 400s asumimos que no había nada enchufado
+            if (f[1] - enc).seconds > 400:
+                activa = activa + (f[1] - enc)
+            # Por si tenemos algún otro 0 el mismo día sin un 1 anterior, ponemos enc a una fecha remota
+            enc = datetime.datetime(2000, 1, 1, 1, 1, 1)
+        if Debug:
+            print(f, activa, enc)
+    if Debug:
+        print(activa)
+    # Cuando el número de segundos de deltatime pasa de 86399 automáticamente suma un día y pone los segundos a 0
+    horas, minutos, seg = Convertir_segundos(activa.days * 86400 + activa.seconds)
+    # Eliminamos la entrada de este mes si la había
+    cursor.execute(f'DELETE FROM RedNode.Sensores WHERE Sensor = "MCarga" AND Tiempo = "{Año}-{Mes.zfill(2)}-01"')
+    cursor.execute('commit')
+    cursor.execute(f'INSERT INTO RedNode.Sensores (tiempo, sensor, valor) VALUES ("{Año}-{Mes.zfill(2)}-01", "MCarga", {horas+(minutos/100)})')
+    cursor.execute('commit')
+    con.close()
+    return(horas,minutos)
+
+
 def Clasifica():
     """ Función para pasar las películas de los discos a carpetas organizadas alfabéticamente por la primera letra 
     ya que con discos tan grandes es un suplicio buscarlas con el WDTV.
@@ -1200,6 +1247,15 @@ def Clasifica():
             os.rename(f, letra + env.DIR + f)
         os.chdir('..')
     return          
+
+def Convertir_segundos(segundos):
+    """ Convierte segundos en horas minutos y segundos
+    """
+    horas = segundos // 3600
+    segundos_restantes = segundos % 3600
+    minutos = segundos_restantes // 60
+    segundos_finales = segundos_restantes % 60
+    return horas, minutos, segundos_finales
 
 def Copia():
     """ Se encargaba de realizar una copia del contenido de varias carpetas por FTP al ftp de Movelcan y lanzando una macro,
@@ -1579,61 +1635,33 @@ def CuantaCarga():
         Esta función la ejecutaremos una vez al mes para generar los datos para la gráfica en la web
         La llamaremos desde la misma que generamos otros gráficos mensuales
     """
-    # Extraemos del log (venus:/home/root/lib/Carga.log) las líneas que contienen el resumen diario
-    lineas = os.popen("ssh -l root venus grep estado /home/root/lib/Carga.log |cut -d ' ' -f 1,9,12").read().split('\n')
-    # Nos cepillamos la última línea vacía
-    lineas.remove('')
-    # Separamos fecha, minutos y segundos
-    lineas = [x.split() for x in lineas]
-    # Aunque las llamamos horas y minutos, realmente son minutos y segundos, de ahí que después dividamos por 60
-    horas = minutos = horasm = minutosm = 0
-    # Cogemos el mes inicial para saber cuando cambiamos
-    mes = lineas[0][0][3:10]
+    import mysql.connector, locale
+    locale.setlocale(locale.LC_ALL, '')
+    # Abrimos conexión con el MySQL
+    con = mysql.connector.connect(user=claves.MySQL_user, password=claves.MySQL_password, host='192.168.3.8', database='RedNode')
+    cursor = con.cursor(buffered=True)
+    cursor.execute("SELECT * FROM RedNode.Sensores WHERE Sensor = 'MCarga' ORDER BY Tiempo ASC")
+    lista = list(cursor)
     grafica = []
-    # Sumamos y obtenemos horas y minutos
-    for f in lineas:
-        # Si cambiamos de mes imprimimos, acumulamos y reiniciamos variables
-        if not mes == f[0][3:10]:
-            # Mostramos el subtotal mensual
-            print('El Coche se ha cargado %s:%s horas de la FV el %s' % (round((round(minutosm / 60) + horasm) / 60), (round(minutosm / 60) + horasm) % 60, mes))
-            # Convertimos la fecha a formato yankee para que la pueda tratar el gráfico
-            fecha = datetime.datetime.strptime(f'01/{mes}','%d/%m/%Y')
-            # Vamos rellenando la lista para el CSV
-            grafica.append([fecha.strftime('%Y-%m-%d'), round(minutosm / 60) + horasm])
-            # Vamos totalizando
-            minutos += minutosm
-            horas += horasm
-            minutosm = horasm = 0
-            # Cambiamos el mes
-            mes = f[0][3:10]
-        # Acumulamos para procesar el mes
-        minutosm += int(f[2])
-        horasm += int(f[1])
-    # Siempre se nos quedará colgado el último mes
-    print('El Coche se ha cargado %s:%s horas de la FV el %s' % (round((round(minutosm / 60) + horasm) / 60), (round(minutosm / 60) + horasm) % 60, mes))
-    # Volvemos a convertir la fecha. Habrá que intentar hacerlo de una manera más elegante
-    fecha = datetime.datetime.strptime(f'01/{mes}','%d/%m/%Y')
-    # Añadimos el último total mensual
-    grafica.append([fecha.strftime('%Y-%m-%d'), round(minutosm / 60) + horasm])
-    # Totalizamos
-    minutos += minutosm
-    horas += horasm
-    # Pasamos los minutos a horas y los segundos a minutos
-    horas = round((round(minutos / 60) + horas) / 60)
-    # Nos quedamos con los minutos sobrantes
-    minutos = (round(minutos / 60) + horas) % 60
-    # La fecha actual para mostrar al final de la página
-    actual = datetime.datetime.now().strftime('%c')
-    # Imprimimos el total
-    print('El Coche se ha cargado %s:%s horas de la FV desde Septiembre del 2020' % (horas, minutos))
+    horas = 0
+    minutos = 0
+    for f in lista:
+        # Cogemos solo la fecha, no la hora
+        grafica.append([datetime.datetime.strftime(f[2],'%Y-%m-%d'),f[1]])
+        horas += int(f[1])
+        minutos += f[1] - int(f[1])
     # Generamos el CSV
     with open(env.WEB + 'cargaFV.csv','w') as cargaFV:
         cargaFV.write('Mes,Tiempo\n')
         for f in grafica:
             cargaFV.write(f'{f[0]},{f[1]}\n')
     # Generamos el JSON para rellenar la página
+    minutos = int(minutos * 100 % 60)
+    horas += int(minutos / 60)
     with open(env.WEB + 'cargaFV.txt','w') as cargaFV:
-        cargaFV.write(f'{{"Total":"{horas}:{minutos}", "Actualizado":"{actual}"}}')
+        cargaFV.write(f'{{"Total":"{horas:n}:{minutos}","kWh":"{horas*3:n}","Km":"{int(horas*300/13):n}"}}')
+    con.close()
+    return
 
 def Discolleno():
     """Es lanzada cuando el emule detecta que queda 5 GB o menos libre.
@@ -2748,27 +2776,32 @@ def PasaaBD(Fichero = '/var/log/placa.log', Debug = False):
         Log('Terminamos por hoy la importación de datos del log de la Placa a la BD con el ' + f[0:15] + '  y hemos importado ' + str(contador) + ' valores y comprimido el log')
 
 def PasaaMySQL(Debug = False):
-    """ Esta función pasa al MySQL los valores almacenados de la Placa en el sqlite3
+    """ Esta función pasa al MySQL los valores almacenados de algún sistema en otros formatos como logs, csv, o sqlite3
     """
-    import sqlite3, datetime, mysql.connector
+    import sqlite3, mysql.connector
     
     if type(Debug) == str:
         Debug = eval(Debug)
+    """
     # Conectamos con la BD del sqlite3
     con = sqlite3.connect('/mnt/e/.mini/placa.db')
     cursor = con.cursor()
     # Obtenemos los datos hasta septiembre de 2024, que fue cuando desde el NodeRed empezamos a mandarlos al MySQL
     datos = cursor.execute("Select * From placa Where Fecha < '2024-09-16' AND Fecha > '1980'").fetchall()
     con.close()
+    """
     # Abrimos conexión con el MySQL
     con = mysql.connector.connect(user=claves.MySQL_user, password=claves.MySQL_password, host='192.168.3.8', database='RedNode')
     cursor = con.cursor(buffered=True)
-    temp = 0
-    for f in datos:
-        # Filtramos los datos repetidos para quedarnos solo con los diferentes
-        if f[2] != temp:
-            temp = f[2]
-            cursor.execute("INSERT INTO Sensores (Tiempo, Sensor, Valor) VALUES ('" + str(f[0]) + "', 'APlaca', " + str(temp) + ")")
+    # Leemos el csv de la carga del coche de la FV. Viene totalizado por meses la fecha en formato AAAA-MM-DD,minutos
+    with open(env.WEB + 'cargaFV.csv','r') as cargaFV:
+        for f in cargaFV:
+            if f.split(',')[0] == 'Mes':
+                continue
+            fecha = f"{f.split(',')[0]} 23:00:00"
+            valor = int(f[:-1].split(',')[1])
+            valor = round(valor/60,0) + ((valor % 60) / 100)
+            cursor.execute(f'INSERT INTO Sensores (Tiempo, Sensor, Valor) VALUES ("{fecha}", "MCarga", {valor})')
     cursor.execute('commit')
     con.close()
     return

@@ -1,5 +1,6 @@
 #!/bin/bash
 #Macro para hacer copias de bin y /mnt/f a Google Drive usando rclone
+# Ver 1.4: Comprimimos con gzip la BD del Nodered antes de copiarla
 # Ver 1.3: Añadimos la copia de la BD del Mysql del Nodered
 # Ver 1.2: Creamos el crontab .txt en /tmp y comparamos con el diff para ver si ha cambiado y copiarlo a bin
 # Ver 1.1: Añadimos /mnt/e/util y /mnt/e/.mini y también generamos un fichero con el crontab en bin antes de la copia
@@ -14,7 +15,7 @@ if [ $? -eq 1 ]
 		cp /tmp/crontab.txt /home/hector/bin/crontab.txt
 fi
 # Hacemos copia de la BD del MySQL
-sudo mysqldump RedNode > /mnt/e/.mini/RedNode.sql
+sudo mysqldump RedNode | gzip -f - > /mnt/e/.mini/RedNode.sql.gz
 for f in /home/hector/bin /mnt/f /mnt/e/util /mnt/e/.mini /home/hector/CargaCoche /etc/default; do 
 	rclone sync $f Drive:Odroid/${f##*/} --exclude "art_cache/**" --exclude "__pycache__/*" --exclude ".git/**" -v --log-file /tmp/salcopias.txt
 done

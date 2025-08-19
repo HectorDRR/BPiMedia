@@ -78,6 +78,7 @@ sudo tail -140 /var/log/syslog|grep -v CRON|grep -v DHT|tail -40
 [ -f /tmp/mulacaida.txt ] && cat /tmp/mulacaida.txt
 [ -f /tmp/ftpcaido.txt ] && cat /tmp/ftpcaido.txt
 [ -f /home/hector/milog.txt ] && cat /home/hector/milog.txt
+[ -f /tmp/salcopia.txt ] && cat /tmp/salcopia.txt
 # echo la carga del coche
 # read p
 # ssh -l root venus tail -20 /home/root/lib/Carga.log

@@ -2,6 +2,7 @@
 # Macro para chequear si los procesos principales del sistema están funcionando y si no, arrancarlos.
 function Amule {
 	echo $(date) aMule parado, lo arrancamos de nuevo>>/tmp/mulacaida.txt
+	echo $(date) aMule parado, lo arrancamos de nuevo | mutt -s 'Problema mulita' hector.d.rguez@gmail.com
     sudo service amule-daemon stop
     pkill -9 amule
     sudo service amule-daemon start
@@ -18,6 +19,7 @@ do
 	if [ $? -eq 1 ]
 	then
 		echo $(date) $f cascado, lo arrancamos de nuevo>>/tmp/mulacaida.txt
+		echo $(date) $f cascado, lo arrancamos de nuevo | mutt -s 'Mulita cascada' hector.d.rguez@gmail.com
 		# Hay veces que casca el amuled pero no el amuleweb y por eso el servicio no arranca
 		if [[ $f == amuled ]]
 		then
