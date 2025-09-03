@@ -37,8 +37,8 @@ if [ $tam -lt 10 ]
 fi
 echo .
 cat /mnt/e/util/quedan.txt
-echo HD pendiente pasar a Metal
-find /mnt/e/HD/ -maxdepth 1 \( -name '*.mkv' -o -name '*.mp4' -o -name '*.avi' \) \( -perm 666 -o -perm 646 -o -perm 677 \) -exec du -ch '{}' +
+#echo HD pendiente pasar a Metal
+#find /mnt/e/HD/ -maxdepth 1 \( -name '*.mkv' -o -name '*.mp4' -o -name '*.avi' \) \( -perm 666 -o -perm 646 -o -perm 677 \) -exec du -ch '{}' +
 echo HD pendiente pasar a disco
 find /mnt/e/HD/ -maxdepth 1 \( -name '*.mkv' -o -name '*.mp4' -o -name '*.avi' \) \( -perm 666 -o -perm 766 ! -name '*.part' \) -exec du -ch '{}' +
 echo HD Infantiles pendientes de pasar a disco
